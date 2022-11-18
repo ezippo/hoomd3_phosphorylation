@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-
-import sys,os
 import numpy as np
+import gsd, gsd.hoomd
 import hoomd
-import gsd
+
 
 # UNITS: distance -> nm   (!!!positions and sigma in files are in agstrom!!!)
 #        mass -> amu
@@ -16,10 +15,8 @@ production_steps=200000000 # Total number of steps
 production_T=300 # Temperature for production run in Kelvin
 box_lenght=50
 
-stat_file = 'stats_module.dat'
-filein = 'input_stats/ck1d-rigid_tdp43start.gsd'
-ex_number = sys.argv[1]
-logfile = 'ck1d-rigid_tdp43_ex'+str(ex_number)
+stat_file = 'input_stats/stats_module.dat'
+filein_ck1d = 'input_stats/CA_ck1delta.pdb'
 
 def aa_stats_from_file(filename):
     '''
@@ -84,8 +81,8 @@ def aa_stats_sequence(filename, aa_dict):
 
 
 if __name__=='__main__':
-
-    # ### Input parameters for all the amino acids 
+    
+    # Input parameters for all the amino acids 
     aa_param_dict = aa_stats_from_file(stat_file)
     aa_type = list(aa_param_dict.keys())
     aa_mass = []
@@ -97,21 +94,33 @@ if __name__=='__main__':
         aa_charge.append(aa_param_dict[k][1])
         aa_sigma.append(aa_param_dict[k][2])
         aa_lambda.append(aa_param_dict[k][3])
-
-    ck1d_id, ck1d_mass, ck1d_charge, ck1d_sigma, ck1d_pos = aa_stats_sequence('CA_ck1delta.pdb', aa_param_dict)
+    
+    ck1d_id, ck1d_mass, ck1d_charge, ck1d_sigma, ck1d_pos = aa_stats_sequence(filein_ck1d, aa_param_dict)
     ck1d_length = len(ck1d_id)       
     ck1d_tot_mass = np.sum(ck1d_mass)   
     ck1d_pos_arr = np.array(ck1d_pos)  
     ck1d_cof_pos = ( np.sum(ck1d_pos_arr[:,0]*ck1d_mass)/ck1d_tot_mass , np.sum(ck1d_pos_arr[:,1]*ck1d_mass)/ck1d_tot_mass , np.sum(ck1d_pos_arr[:,2]*ck1d_mass)/ck1d_tot_mass  )
     ck1d_rel_pos = ck1d_pos_arr - ck1d_cof_pos
     
-    # ### HOOMD3 routine
-    # Main objects initialization
-    device = hoomd.device.CPU
-    sim = hoomd.Simulation(device=device)
-    integrator = hoomd.md.Integrator(production_dt)
     
-    sim.create_state_from_gsd(filename=filein)
+    # create rigid body    
+    rigid = hoomd.md.constrain.Rigid()
+    rigid.body["R"] = {
+        "constituent_types": [aa_type[ck1d_id[i]] for i in range(ck1d_length)],
+        "positions": ck1d_rel_pos,
+        "orientations": [(1,0,0,0)]*ck1d_length,
+        "charges": ck1d_charge,
+        "diameters": [0.0]*ck1d_length
+        }
     
+    sim = hoomd.Simulation(device=hoomd.device.CPU())
+    sim.create_state_from_gsd(filename='input_stats/ck1d-center_tdp43_start.gsd')
     
+    rigid.create_bodies(sim.state)
     
+    integrator = hoomd.md.Integrator(dt=0.005, integrate_rotational_dof=True)
+    integrator.rigid = rigid
+    sim.operations.integrator = integrator
+    
+    sim.run(0)
+    hoomd.write.GSD.write(state=sim.state, filename='input_stats/ck1d-rigid_tdp43_start.gsd')
