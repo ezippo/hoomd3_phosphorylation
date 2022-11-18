@@ -1,112 +1,27 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+import sys,os
 import numpy as np
 import gsd, gsd.hoomd
-import hoomd
+
+import config_utilities as c_util
 
 # UNITS: distance -> nm   (!!!positions and sigma in files are in agstrom!!!)
 #        mass -> amu
 #        energy -> kJ/mol
 # ### MACROs
-production_dt=0.01 # Time step for production run in picoseconds
 box_length=50
 
 stat_file = 'input_stats/stats_module.dat'
 filein_ck1d = 'input_stats/CA_ck1delta.pdb'
-filein_tdp43 = 'input_stats/CA_TDP-43_261truncated_mod.pdb'
+filein_tdp43 = 'input_stats/CA_TDP-43_261truncated.pdb'
 
-def aa_stats_from_file(filename):
-    '''
-    Parameters
-    ----------
-    filename : str
-        name of stats file.
-
-    Returns
-    -------
-    aa_dict : dicct
-        dict('amino acid name':[mass, charge, sigma, lambda])
-    '''
-    aa_dict = {}
-    with open(filename, 'r') as fid:
-        for line in fid:
-            if line[0]!='#':
-                line_list = line.rsplit()
-                aa_dict[line_list[0]] = np.loadtxt(line_list[1:], dtype=float)
-    return aa_dict
-
-
-def aa_stats_sequence(filename, aa_dict):
-    '''
-    Parameters
-    ----------
-    filename : str
-        Name of the file with the chain sequence.
-    aa_dict : dict
-        dict('amino acid name':[mass, charge, sigma, lambda]).
-
-    Returns
-    -------
-    chain_id : list
-        List of a.a. id numbers of the sequence.
-    chain_mass : list
-        List of a.a. masses of the sequence.
-    chain_charge : list
-        List of a.a. charges of the sequence.
-    chain_sigma : list
-        List of a.a. radia of the sequence.
-    chain_pos : list
-        List of a.a. position tuple (x,y,z) of the sequence.
-    '''
-    chain_id = []
-    chain_mass = []
-    chain_charge = []
-    chain_sigma = []
-    chain_pos = []
-    aa_keys = list(aa_dict.keys()) 
-    with open(filename, 'r') as fid:
-        for line in fid:
-            if line[0]=='A':
-                line_list = line.rsplit()
-                aa_name = line_list[3]
-                chain_id.append(aa_keys.index(aa_name))
-                chain_mass.append(aa_dict[aa_name][0])
-                chain_charge.append(aa_dict[aa_name][1])
-                chain_sigma.append(aa_dict[aa_name][2])
-                chain_pos.append( (float(line_list[6])/10., float(line_list[7])/10., float(line_list[8])/10.) )
-    return chain_id, chain_mass, chain_charge, chain_sigma, chain_pos
-
-def protein_moment_inertia(chain_rel_pos, chain_mass, chain_sigma=None):
-    '''
-    Parameters
-    ----------
-    chain_rel_pos : list
-        List of a.a. position tuple (x,y,z) of the sequence.
-    chain_mass : list
-        List of a.a. masses of the sequence.
-    chain_sigma : list, optional
-        List of a.a. radia of the sequence.
-
-    Returns
-    -------
-    I : array
-        Moment of inertia tensor.
-    '''
-    I = np.zeros((3,3))
-    if chain_sigma==None:      # particle is a point
-        for i,r in enumerate(chain_rel_pos):
-            I += chain_mass[i]*( np.dot(r,r)*np.identity(3) - np.outer(r, r) )
-    else:                      # particle is a sphere
-        for i,r in enumerate(chain_rel_pos):
-            I_ref = 2 / 5 * chain_mass[i]*chain_sigma[i]*chain_sigma[i]*np.identity(3)
-            I += I_ref + ck1d_mass[i]*( np.dot(r,r)*np.identity(3) - np.outer(r, r) )
-    return I
-    
+# ------------------------- MAIN -------------------------------
 
 if __name__=='__main__':
     # Input parameters for all the amino acids 
-    aa_param_dict = aa_stats_from_file(stat_file)
+    aa_param_dict = c_util.aa_stats_from_file(stat_file)
     aa_type = list(aa_param_dict.keys())    
     aa_mass = []
     aa_charge = []
@@ -120,24 +35,27 @@ if __name__=='__main__':
     
     # Now we can translate the entire sequence into a sequence of numbers and 
     # assign to each a.a. of the sequence its stats
-    ck1d_id, ck1d_mass, ck1d_charge, ck1d_sigma, ck1d_pos = aa_stats_sequence(filein_ck1d, aa_param_dict)
-    
+    ck1d_id, ck1d_mass, ck1d_charge, ck1d_sigma, ck1d_pos = c_util.aa_stats_sequence(filein_ck1d, aa_param_dict)
+    ck1d_pos_arr = np.array(ck1d_pos)/10.
+    ck1d_sigma_arr = np.array(ck1d_sigma)/10.
     ck1d_length = len(ck1d_id)       
     ck1d_tot_mass = np.sum(ck1d_mass)   
-    ck1d_pos_arr = np.array(ck1d_pos)  
     ck1d_cof_pos = ( np.sum(ck1d_pos_arr[:,0]*ck1d_mass)/ck1d_tot_mass , np.sum(ck1d_pos_arr[:,1]*ck1d_mass)/ck1d_tot_mass , np.sum(ck1d_pos_arr[:,2]*ck1d_mass)/ck1d_tot_mass  )
     ck1d_rel_pos = ck1d_pos_arr - ck1d_cof_pos
     
-    tdp43_id, tdp43_mass, tdp43_charge, tdp43_sigma, tdp43_pos = aa_stats_sequence(filein_tdp43, aa_param_dict)
+    tdp43_id, tdp43_mass, tdp43_charge, tdp43_sigma, tdp43_pos = c_util.aa_stats_sequence(filein_tdp43, aa_param_dict)
+    tdp43_pos_arr = np.array(tdp43_pos)/10.
+    tdp43_pos_arr = tdp43_pos_arr + 7.
+    tdp43_sigma_arr = np.array(tdp43_sigma)/10.
     tdp43_length = len(tdp43_id)
     print(ck1d_length)
     print(tdp43_length)
     
     # ck1d moment of inertia
-    I = protein_moment_inertia(ck1d_rel_pos, ck1d_mass)
+    I = c_util.protein_moment_inertia(ck1d_rel_pos, ck1d_mass)
     I_diag, E_vec = np.linalg.eig(I)
     ck1d_diag_pos = np.dot( E_vec.T, ck1d_rel_pos.T).T
-    I_check = protein_moment_inertia(ck1d_diag_pos, ck1d_mass)  #check
+    I_check = c_util.protein_moment_inertia(ck1d_diag_pos, ck1d_mass)  #check
     
     # Initialize bond
     nbonds_tdp43 = tdp43_length-1
@@ -152,7 +70,7 @@ if __name__=='__main__':
     s.particles.typeid = [len(aa_type)] + tdp43_id
     s.particles.mass = [ck1d_tot_mass] + tdp43_mass
     s.particles.charge = [0] + tdp43_charge
-    s.particles.position = [ck1d_cof_pos] + tdp43_pos
+    s.particles.position = np.append( [ck1d_cof_pos] , tdp43_pos_arr)
     s.particles.moment_inertia = [I_diag[0], I_diag[1], I_diag[2]] + [0,0,0]*tdp43_length 
     s.particles.orientation = [(1, 0, 0, 0)] * (tdp43_length+1)
     s.particles.body = [0] + [-1]*tdp43_length
@@ -168,7 +86,6 @@ if __name__=='__main__':
     
     with gsd.hoomd.open(name='input_stats/ck1d-center_tdp43_start.gsd', mode='wb') as fout:
         fout.append(s)
-        fout.close()
         
     '''
     # create rigid body    
