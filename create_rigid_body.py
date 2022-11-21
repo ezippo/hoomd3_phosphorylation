@@ -53,7 +53,7 @@ if __name__=='__main__':
     sim = hoomd.Simulation(device=hoomd.device.CPU())
     sim.create_state_from_gsd(filename='input_stats/ck1d-center_tdp43_start.gsd')
     print(sim.state.types)
-    #rigid.create_bodies(sim.state)
+    rigid.create_bodies(sim.state)
     integrator = hoomd.md.Integrator(dt=0.005, integrate_rotational_dof=True)
     integrator.rigid = rigid
     sim.operations.integrator = integrator
