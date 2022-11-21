@@ -92,3 +92,185 @@ def protein_moment_inertia(chain_rel_pos, chain_mass, chain_sigma=None):
     return I
     
 
+def U_ashbaugh_hatch(r, sigma, lambda_hps, epsilon=0.8368):
+    '''
+    HPS model: Ashbaugh-Hatch potential
+    Lennard-Jones potential corrected for hydrophobicity effects
+    
+    Parameters
+    ----------
+    r : float
+        Distance between particles (potential variable).
+    sigma : float
+        Lennard-Jones parameter (particle size).
+    lambda_hps : float
+        Hydrophobicity scale, between 0(hydrophilic) and 1(hydrophobic).
+    epsilon : float, optional
+        Lennard-Jones energy parameter. The default is 0.8368.
+
+    Returns
+    -------
+    U : float
+        U_ashbaugh(r).
+
+    '''
+    rmin = 2.**(1./6.) * sigma
+    Ulj = 4*epsilon*((sigma/r)**12 - (sigma/r)**6)
+    
+    if r <= rmin:
+        U = Ulj + (1-lambda_hps)*epsilon
+    else:
+        U = lambda_hps*Ulj
+    
+    return U
+
+def F_ashbaugh_hatch(r, sigma, lambda_hps, epsilon=0.8368):
+    '''
+    HPS model: Ashbaugh-Hatch force
+    Lennard-Jones force corrected for hydrophobicity effects
+    
+    F_ashbaugh = - 
+    
+    Parameters
+    ----------
+    r : float
+        Distance between particles (potential variable).
+    sigma : float
+        Lennard-Jones parameter (particle size).
+    lambda_hps : float
+        Hydrophobicity scale, between 0(hydrophilic) and 1(hydrophobic).
+    epsilon : float, optional
+        Lennard-Jones energy parameter. The default is 0.8368.
+
+    Returns
+    -------
+    F : float
+        F_ashbaugh(r).
+
+    '''
+    rmin = 2.**(1./6.) * sigma
+    Flj = 24*epsilon*( 2*(sigma/r)**12 - (sigma/r)**6 )/r
+    
+    if r <= rmin:
+        F = Flj
+    else:
+        F = lambda_hps*Flj
+    
+    return F
+
+
+def Ulist_ashbaugh(sigma, lambda_hps, r_max, r_min=0.3, n_bins=100, epsilon=0.8368):     
+    '''
+    HPS model:
+    Table Ashbaugh-Hatch potential for HOOMD3 simulations
+
+    Parameters
+    ----------
+    sigma : float, tuple, list, narray
+        Lennard-Jones parameter: average particle size or sizes of the 2 involved particles.
+    lambda_hps : flaot, tuple, list, ndarray
+        HPS parameter: average hydrophobicity scale or hydrophobicity scales of the 2 involved particles.
+    r_max : float
+        Maximum potential variable.
+    r_min : float, optional
+        Minimum potential variable. The default is 0.
+    n_bins : int, optional
+        Size of the tble potential. The default is 100.
+    epsilon : float, optional
+        Lennard-Jones parameter: energy scale. The default is 0.8368.
+
+    Returns
+    -------
+    Ulist : list
+        List of U_ashbaugh(r) with r in range r_min to r_max in n_bins steps.
+
+    '''
+    # Error handlig for bad sigma values
+    if type(sigma)==float:
+        s = sigma        
+    else:
+        try:
+            if len(sigma)==2:
+                s = (sigma[0] + sigma[1])/2.
+            else:
+                raise IndexError('sigma and lambda_hps params in Ulist_ashbaugh must be float or iterable with 2 values!')
+        except:
+            print('TypeError: sigma and lambda_hps params in Ulist_ashbaugh must be float or iterable with 2 values!')
+    
+    # Error handlig for bad lambda_hps values
+    if type(lambda_hps)==float:
+        l_hps = lambda_hps 
+    else:
+        try:
+            if len(lambda_hps)==2:
+                l_hps = (lambda_hps[0] + lambda_hps[1])/2.
+            else:
+                raise IndexError('sigma and lambda_hps params in Ulist_ashbaugh must be float or iterable with 2 values!')
+        except:
+            print('TypeError: sigma and lambda_hps params in Ulist_ashbaugh must be float or iterable with 2 values!')
+    
+    r_range = np.linspace(r_min, r_max, n_bins, endpoint=False)
+    Ulist = [ U_ashbaugh_hatch(r, s, l_hps, epsilon) for r in r_range ]
+    
+    return Ulist
+    
+
+def Flist_ashbaugh(sigma, lambda_hps, r_max, r_min=0.3, n_bins=100, epsilon=0.8368):
+    '''
+    HPS model:
+    Table Ashbaugh-Hatch force for HOOMD3 simulations
+    
+    F_ashbaugh = - d U_ashbaugh / d r
+
+    Parameters
+    ----------
+    sigma : float, tuple, list, narray
+        Lennard-Jones parameter: average particle size or sizes of the 2 involved particles.
+    lambda_hps : flaot, tuple, list, ndarray
+        HPS parameter: average hydrophobicity scale or hydrophobicity scales of the 2 involved particles.
+    r_max : float
+        Maximum potential variable.
+    r_min : float, optional
+        Minimum potential variable. The default is 0.
+    n_bins : int, optional
+        Size of the tble potential. The default is 100.
+    epsilon : float, optional
+        Lennard-Jones parameter: energy scale. The default is 0.8368.
+
+    Returns
+    -------
+    Flist : list
+        List of F_ashbaugh(r) with r in range r_min to r_max in n_bins steps.
+
+    '''
+    # Error handlig for bad sigma values
+    if type(sigma)==float:
+        s = sigma        
+    else:
+        try:
+            if len(sigma)==2:
+                s = (sigma[0] + sigma[1])/2.
+            else:
+                raise IndexError('sigma and lambda_hps params in Flist_ashbaugh must be float or iterable with 2 values!')
+        except:
+            print('TypeError: sigma and lambda_hps params in Flist_ashbaugh must be float or iterable with 2 values!')
+    
+    # Error handlig for bad lambda_hps values
+    if type(lambda_hps)==float:
+        l_hps = lambda_hps 
+    else:
+        try:
+            if len(lambda_hps)==2:
+                l_hps = (lambda_hps[0] + lambda_hps[1])/2.
+            else:
+                raise IndexError('sigma and lambda_hps params in Flist_ashbaugh must be float or iterable with 2 values!')
+        except:
+            print('TypeError: sigma and lambda_hps params in Flist_ashbaugh must be float or iterable with 2 values!')
+    
+    r_range = np.linspace(r_min, r_max, n_bins, endpoint=False)
+    Flist = [ F_ashbaugh_hatch(r, s, l_hps, epsilon) for r in r_range ]
+    
+    return Flist
+    
+F = Flist_ashbaugh(sigma=(1,2), lambda_hps=0.2, r_max=1.)
+
