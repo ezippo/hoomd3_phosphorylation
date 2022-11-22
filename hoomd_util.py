@@ -159,7 +159,7 @@ def F_ashbaugh_hatch(r, sigma, lambda_hps, epsilon=0.8368):
     return F
 
 
-def Ulist_ashbaugh(sigma, lambda_hps, r_max, r_min=0.3, n_bins=100, epsilon=0.8368):     
+def Ulist_ashbaugh(sigma, lambda_hps, r_max, r_min=0.4, n_bins=100, epsilon=0.8368):     
     '''
     HPS model:
     Table Ashbaugh-Hatch potential for HOOMD3 simulations
@@ -215,7 +215,7 @@ def Ulist_ashbaugh(sigma, lambda_hps, r_max, r_min=0.3, n_bins=100, epsilon=0.83
     return Ulist
     
 
-def Flist_ashbaugh(sigma, lambda_hps, r_max, r_min=0.3, n_bins=100, epsilon=0.8368):
+def Flist_ashbaugh(sigma, lambda_hps, r_max, r_min=0.4, n_bins=100, epsilon=0.8368):
     '''
     HPS model:
     Table Ashbaugh-Hatch force for HOOMD3 simulations
@@ -271,6 +271,8 @@ def Flist_ashbaugh(sigma, lambda_hps, r_max, r_min=0.3, n_bins=100, epsilon=0.83
     Flist = [ F_ashbaugh_hatch(r, s, l_hps, epsilon) for r in r_range ]
     
     return Flist
-    
-F = Flist_ashbaugh(sigma=(1,2), lambda_hps=0.2, r_max=1.)
 
+if __name__=='__main__':
+    print(Ulist_ashbaugh(0.5, 0.5, 2.5, 0.2, 200))
+    print(Flist_ashbaugh(0.5, 0.5, 2.5, 0.2, 200))
+    
