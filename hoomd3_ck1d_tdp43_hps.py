@@ -39,17 +39,6 @@ dt_backup = 1000000
 
 dt_try_change = 200
 
-def compute_distances(active_center, ser_pos):
-    n_ser = len(ser_pos)
-    distances = ser_pos-active_center
-    distances = np.array([ np.sqrt( (distances[i]**2).sum() ) for i in range(n_ser)  ])
-    return distances
-
-def compute_center(pos):
-    n = len(pos)
-    center_pos = np.array([ np.sum(pos[:,i])/n for i in range(3) ])
-    return center_pos
-
 
 
 # ### CUSTOM ACTIONS
@@ -72,8 +61,8 @@ class ChangeSerine(hoomd.custom.Action):
     def act(self, timestep):
         snap = self._state.get_snapshot()
         positions = snap.particles.position
-        active_pos = compute_center(positions[self._active_serials])
-        dist = compute_distances(active_pos, positions[self._ser_serials])
+        active_pos = hu.compute_center(positions[self._active_serials])
+        dist = hu.compute_distances(active_pos, positions[self._ser_serials])
         if np.min(dist)<CONTACT:
             ser_index = self._ser_serials[np.argmin(dist)]
             if snap.particles.typeid[ser_index]==15:

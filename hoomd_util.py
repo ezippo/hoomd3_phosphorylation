@@ -272,6 +272,19 @@ def Flist_ashbaugh(sigma, lambda_hps, r_max, r_min=0.4, n_bins=100, epsilon=0.83
     
     return Flist
 
+
+def compute_distances(active_center, ser_pos):
+    n_ser = len(ser_pos)
+    distances = ser_pos-active_center
+    distances = np.array([ np.sqrt( (distances[i]**2).sum() ) for i in range(n_ser)  ])
+    return distances
+
+def compute_center(pos):
+    n = len(pos)
+    center_pos = np.array([ np.sum(pos[:,i])/n for i in range(3) ])
+    return center_pos
+
+
 if __name__=='__main__':
     print(Ulist_ashbaugh(0.5, 0.5, 2.5, 0.2, 200))
     print(Flist_ashbaugh(0.5, 0.5, 2.5, 0.2, 200))
