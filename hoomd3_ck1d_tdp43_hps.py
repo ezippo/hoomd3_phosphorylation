@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import sys,os
+import time
 import numpy as np
 import hoomd
 import gsd, gsd.hoomd
@@ -11,29 +12,86 @@ import hoomd_util as hu
 # UNITS: distance -> nm   (!!!positions and sigma in files are in agstrom!!!)
 #        mass -> amu
 #        energy -> kJ/mol
-# ### MACROs
-production_dt=0.01 # Time step for production run in picoseconds
-production_steps=20001 # Total number of steps 
-production_T=300 # Temperature for production run in Kelvin
-box_lenght=50
 
+# ### MACROs
+# Simulation parameters
+production_dt=0.01       # Time step for production run in picoseconds
+production_steps=400000   # Total number of steps 
+production_T=300         # Temperature for production run in Kelvin
+temp = production_T*0.00831446      # Temp is RT [kJ/mol]
+box_lenght=50
+seed = 4567     #np.random.randint(0, 65535) 
+CONTACT = 1.0
+
+# Files
 stat_file = 'input_stats/stats_module.dat'
 filein_ck1d = 'input_stats/CA_ck1delta.pdb'
 #ex_number = sys.argv[1]
-ex_number = 0
+ex_number = 2
 file_start = 'input_stats/ck1d-rigid_tdp43_start.gsd'
-logfile = 'ck1d-rigid_tdp43_ex'+str(ex_number)
+logfile = 'ck1d-rigid_tdp43_exl'+str(ex_number)
 
-seed = np.random.randint(0, 65535) 
-temp = production_T*0.00831446                         # Temp is kT/0.00831446
-dt_dump = 250
-dt_active_ser = 1
-dt_log = 1000
-dt_backup = 1000
+# Logging time interval
+dt_dump = 200
+dt_active_ser = 200
+dt_log = 1000000
+dt_backup = 1000000
+
+dt_try_change = 200
+
+def compute_distances(active_center, ser_pos):
+    n_ser = len(ser_pos)
+    distances = ser_pos-active_center
+    distances = np.array([ np.sqrt( (distances[i]**2).sum() ) for i in range(n_ser)  ])
+    return distances
+
+def compute_center(pos):
+    n = len(pos)
+    center_pos = np.array([ np.sum(pos[:,i])/n for i in range(3) ])
+    return center_pos
+
+
+
+# ### CUSTOM ACTIONS
+class PrintTimestep(hoomd.custom.Action):
+
+    def __init__(self, t_start):
+        self._t_start = t_start
+
+    def act(self, timestep):
+        current_time = time.time()
+        current_time = current_time - self._t_start
+        print(f"Elapsed time {current_time} | Step {timestep}/{production_steps} " )
+
+class ChangeSerine(hoomd.custom.Action):
+
+    def __init__(self, active_serials, ser_serials):
+        self._active_serials = active_serials
+        self._ser_serials = ser_serials
+
+    def act(self, timestep):
+        snap = self._state.get_snapshot()
+        positions = snap.particles.position
+        active_pos = compute_center(positions[self._active_serials])
+        dist = compute_distances(active_pos, positions[self._ser_serials])
+        if np.min(dist)<CONTACT:
+            ser_index = self._ser_serials[np.argmin(dist)]
+            if snap.particles.typeid[ser_index]==15:
+                snap.particles.typeid[ser_index] = 20
+                print(f"Phosphorylation occured: SER id {ser_index}")
+            elif snap.particles.typeid[ser_index]==20:
+                print(f"SER {ser_index} already phosphorylated")
+            else:
+                print(f"ERROR: residue {ser_index} is not a serine! ")
+        self._state.set_snapshot(snap)
+        
 
 # --------------------------- MAIN ------------------------------
 
 if __name__=='__main__':
+    # TIME START
+    time_start = time.time()
+
     # ### Input parameters for all the amino acids 
     aa_param_dict = hu.aa_stats_from_file(stat_file)
     aa_type = list(aa_param_dict.keys())
@@ -63,6 +121,10 @@ if __name__=='__main__':
     snap = sim.state.get_snapshot()
     ck1d_mass = snap.particles.mass[0]
     
+    type_id = snap.particles.typeid
+    ser_serials = np.where(type_id[:155]==15)[0]
+    activeCK1d_serials = [301, 302, 303]     # [171, 204, 301, 302, 303, 304, 305]
+ 
     # # rigid body
     rigid = hoomd.md.constrain.Rigid()
     rigid.body['R'] = {
@@ -76,8 +138,8 @@ if __name__=='__main__':
     # # groups
     all_group = hoomd.filter.All()
     moving_group = hoomd.filter.Rigid(("center", "free"))
-    ser_group = hoomd.filter.Intersection(moving_group, hoomd.filter.Type(["SER"]))
-    active_group = hoomd.filter.Tags([171, 204, 301, 302, 303, 304, 305])
+    ser_group = hoomd.filter.Tags(list(ser_serials))
+    active_group = hoomd.filter.Tags(activeCK1d_serials)
     active_ser_group = hoomd.filter.Union(active_group, ser_group)
     
     # ## PAIR INTERACTIONS
@@ -108,11 +170,11 @@ if __name__=='__main__':
             atom2 = aa_type[j]
             Ulist = hu.Ulist_ashbaugh(sigma=[aa_sigma[i], aa_sigma[j]], 
                                       lambda_hps=[aa_lambda[i], aa_lambda[j]],
-                                      r_max=2.0, r_min=0.4, n_bins=1000, epsilon=0.8368)
+                                      r_max=2.0, r_min=0.2, n_bins=100000, epsilon=0.8368)
             Flist = hu.Flist_ashbaugh(sigma=[aa_sigma[i], aa_sigma[j]], 
                                       lambda_hps=[aa_lambda[i], aa_lambda[j]],
-                                      r_max=2.0, r_min=0.4, n_bins=1000, epsilon=0.8368)
-            ashbaugh_table.params[(atom1, atom2)] = dict(r_min=0.4, U=Ulist, F=Flist)
+                                      r_max=2.0, r_min=0.2, n_bins=100000, epsilon=0.8368)
+            ashbaugh_table.params[(atom1, atom2)] = dict(r_min=0.2, U=Ulist, F=Flist)
             ashbaugh_table.r_cut[(atom1, atom2)] = 2.0            
         ashbaugh_table.params[(atom1, 'R')] = dict(r_min=0., U=[0], F=[0])
         ashbaugh_table.r_cut[(atom1, 'R')] = 0 
@@ -120,14 +182,14 @@ if __name__=='__main__':
     ashbaugh_table.r_cut[('R', 'R')] = 0 
     
     # ## INTEGRATOR
-    integrator = hoomd.md.Integrator(production_dt)        
+    integrator = hoomd.md.Integrator(production_dt, integrate_rotational_dof=True)        
     # method : Langevin
     langevin = hoomd.md.methods.Langevin(filter=moving_group, kT=temp)
     for i,name in enumerate(aa_type):
         langevin.gamma[name] = aa_mass[i]/1000.0
         langevin.gamma_r[name] = (0.0, 0.0, 0.0)
     langevin.gamma['R'] = ck1d_mass/1000.0
-    langevin.gamma_r['R'] = (0.0, 0.0, 0.0)
+    langevin.gamma_r['R'] = (1.0, 1.0, 1.0)
     # constraints : rigid body
     integrator.rigid = rigid
     # forces 
@@ -140,7 +202,7 @@ if __name__=='__main__':
     # dump files
     dump_gsd = hoomd.write.GSD(trigger=hoomd.trigger.Periodic(dt_dump), 
                                filename=logfile+'_dump.gsd', filter=all_group,
-                               dynamic=['momentum'])                  # you can add [attributes(particles/typeid)] to trace phosphorylation
+                               dynamic=['property', 'momentum', 'attribute', 'topology'])                  # you can add [attributes(particles/typeid)] to trace phosphorylation
     active_ser_dcd = hoomd.write.DCD(trigger=hoomd.trigger.Periodic(dt_active_ser),
                                      filename='activeCK1d_SER_exl'+str(ex_number)+'_dump.dcd',
                                      filter=active_ser_group)
@@ -165,13 +227,25 @@ if __name__=='__main__':
                              filename=logfile+'_log.gsd', filter=hoomd.filter.Null(),
                              log=tq_log)
     
+    # # Custom action
+    print(f"Initial time: {time.time()-time_start}")
+    time_start = time.time()
+    time_action = PrintTimestep(time_start)
+    time_writer = hoomd.write.CustomWriter(action=time_action, trigger=hoomd.trigger.Periodic(100000))
+    changeser_action = ChangeSerine(active_serials=activeCK1d_serials, ser_serials=ser_serials)
+    changeser_updater = hoomd.update.CustomUpdater(action=changeser_action, trigger=hoomd.trigger.Periodic(dt_try_change))
+
     # ## SET SIMULATION OPERATIONS
     sim.operations.integrator = integrator 
+    sim.operations.computes.append(therm_quantities)
     sim.operations.writers.append(dump_gsd)
+    sim.operations.writers.append(active_ser_gsd)
     sim.operations.writers.append(active_ser_gsd)
     sim.operations.writers.append(backup1_gsd)
     sim.operations.writers.append(backup2_gsd)
     sim.operations.writers.append(tq_gsd)
-    
+    sim.operations += time_writer
+    sim.operations += changeser_updater
+
     sim.run(production_steps)
     
