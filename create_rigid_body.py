@@ -1,27 +1,29 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+import sys,os
+import itertools
 import numpy as np
 import gsd, gsd.hoomd
 import hoomd
 
-import config_utilities as c_util
+import hoomd_util as hu
 
 # UNITS: distance -> nm   (!!!positions and sigma in files are in agstrom!!!)
 #        mass -> amu
 #        energy -> kJ/mol
 # ### MACROs
-box_lenght=50
+box_length=50
 
 stat_file = 'input_stats/stats_module.dat'
 filein_ck1d = 'input_stats/CA_ck1delta.pdb'
 
+# ------------------------- MAIN -------------------------------
 
 if __name__=='__main__':
-    
     # Input parameters for all the amino acids 
-    aa_param_dict = c_util.aa_stats_from_file(stat_file)
-    aa_type = list(aa_param_dict.keys())
+    aa_param_dict = hu.aa_stats_from_file(stat_file)
+    aa_type = list(aa_param_dict.keys())    
     aa_mass = []
     aa_charge = []
     aa_sigma = []
@@ -32,15 +34,22 @@ if __name__=='__main__':
         aa_sigma.append(aa_param_dict[k][2])
         aa_lambda.append(aa_param_dict[k][3])
     
-    ck1d_id, ck1d_mass, ck1d_charge, ck1d_sigma, ck1d_pos = c_util.aa_stats_sequence(filein_ck1d, aa_param_dict)
+    # Now we can translate the entire sequence into a sequence of numbers and 
+    # assign to each a.a. of the sequence its stats
+    ck1d_id, ck1d_mass, ck1d_charge, ck1d_sigma, ck1d_pos = hu.aa_stats_sequence(filein_ck1d, aa_param_dict)
     ck1d_pos_arr = np.array(ck1d_pos)/10.
     ck1d_sigma_arr = np.array(ck1d_sigma)/10.
     ck1d_length = len(ck1d_id)       
     ck1d_tot_mass = np.sum(ck1d_mass)   
     ck1d_cof_pos = ( np.sum(ck1d_pos_arr[:,0]*ck1d_mass)/ck1d_tot_mass , np.sum(ck1d_pos_arr[:,1]*ck1d_mass)/ck1d_tot_mass , np.sum(ck1d_pos_arr[:,2]*ck1d_mass)/ck1d_tot_mass  )
     ck1d_rel_pos = ck1d_pos_arr - ck1d_cof_pos
-    
+
+        
     # create rigid body    
+    
+    sim = hoomd.Simulation(device=hoomd.device.CPU())
+    sim.create_state_from_gsd(filename='input_stats/ck1d-center_tdp43_start.gsd')
+    
     rigid = hoomd.md.constrain.Rigid()
     rigid.body["R"] = {
         "constituent_types": [aa_type[ck1d_id[i]] for i in range(ck1d_length)],
@@ -49,11 +58,9 @@ if __name__=='__main__':
         "charges": ck1d_charge,
         "diameters": [0.0]*ck1d_length
         }
-    
-    sim = hoomd.Simulation(device=hoomd.device.CPU())
-    sim.create_state_from_gsd(filename='input_stats/ck1d-center_tdp43_start.gsd')
-    print(sim.state.types)
+
     rigid.create_bodies(sim.state)
+    
     integrator = hoomd.md.Integrator(dt=0.005, integrate_rotational_dof=True)
     integrator.rigid = rigid
     sim.operations.integrator = integrator

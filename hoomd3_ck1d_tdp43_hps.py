@@ -16,7 +16,7 @@ import hoomd_util as hu
 # ### MACROs
 # Simulation parameters
 production_dt=0.01       # Time step for production run in picoseconds
-production_steps=400000   # Total number of steps 
+production_steps=2500000   # Total number of steps 
 production_T=300         # Temperature for production run in Kelvin
 temp = production_T*0.00831446      # Temp is RT [kJ/mol]
 box_lenght=50
@@ -32,10 +32,10 @@ file_start = 'input_stats/ck1d-rigid_tdp43_start.gsd'
 logfile = 'ck1d-rigid_tdp43_exl'+str(ex_number)
 
 # Logging time interval
-dt_dump = 200
-dt_active_ser = 200
-dt_log = 1000000
-dt_backup = 1000000
+dt_dump = 2000000
+dt_active_ser = 2000000
+dt_log = 10000000
+dt_backup = 10000000
 
 dt_try_change = 200
 
@@ -68,12 +68,12 @@ class ChangeSerine(hoomd.custom.Action):
             if snap.particles.typeid[ser_index]==15:
                 snap.particles.typeid[ser_index] = 20
                 print(f"Phosphorylation occured: SER id {ser_index}")
+                self._state.set_snapshot(snap)
             elif snap.particles.typeid[ser_index]==20:
                 print(f"SER {ser_index} already phosphorylated")
             else:
                 print(f"ERROR: residue {ser_index} is not a serine! ")
-        self._state.set_snapshot(snap)
-        
+
 
 # --------------------------- MAIN ------------------------------
 
@@ -227,6 +227,9 @@ if __name__=='__main__':
     # ## SET SIMULATION OPERATIONS
     sim.operations.integrator = integrator 
     sim.operations.computes.append(therm_quantities)
+
+    sim.run(2400000)
+
     sim.operations.writers.append(dump_gsd)
     sim.operations.writers.append(active_ser_gsd)
     sim.operations.writers.append(active_ser_gsd)
@@ -236,5 +239,5 @@ if __name__=='__main__':
     sim.operations += time_writer
     sim.operations += changeser_updater
 
-    sim.run(production_steps)
+    sim.run(production_steps-2400000)
     
