@@ -22,6 +22,7 @@ temp = production_T*0.00831446      # Temp is RT [kJ/mol]
 box_lenght=50
 seed = 4567     #np.random.randint(0, 65535) 
 CONTACT = 1.0
+Dmu = -48.0
 
 # Files
 stat_file = 'input_stats/stats_module.dat'
@@ -63,16 +64,27 @@ class ChangeSerine(hoomd.custom.Action):
         positions = snap.particles.position
         active_pos = hu.compute_center(positions[self._active_serials])
         dist = hu.compute_distances(active_pos, positions[self._ser_serials])
+
         if np.min(dist)<CONTACT:
             ser_index = self._ser_serials[np.argmin(dist)]
+
             if snap.particles.typeid[ser_index]==15:
+                U_in = self._forces[0].energy + self._forces[1].energy
                 snap.particles.typeid[ser_index] = 20
-                print(f"Phosphorylation occured: SER id {ser_index}")
                 self._state.set_snapshot(snap)
+                U_fin = self._forces[0].energy + self._forces[1].energy
+                if hu.metropolis_boltzmann(U_fin-U_in, Dmu, temp):
+                    print(f"Phosphorylation occured: SER id {ser_index}")
+                else:
+                    snap.particles.typeid[ser_index] = 15
+                    self._state.set_snapshot(snap)
+                    print(f'Phosphorylation SER id {ser_index} not accepted')
+
             elif snap.particles.typeid[ser_index]==20:
                 print(f"SER {ser_index} already phosphorylated")
+
             else:
-                print(f"ERROR: residue {ser_index} is not a serine! ")
+                print(f"ERROR: residue {ser_index} is not a serine!")
 
 
 # --------------------------- MAIN ------------------------------
@@ -221,14 +233,12 @@ if __name__=='__main__':
     time_start = time.time()
     time_action = PrintTimestep(time_start)
     time_writer = hoomd.write.CustomWriter(action=time_action, trigger=hoomd.trigger.Periodic(100000))
-    changeser_action = ChangeSerine(active_serials=activeCK1d_serials, ser_serials=ser_serials)
+    changeser_action = ChangeSerine(active_serials=activeCK1d_serials, ser_serials=ser_serials, forces=[yukawa, ashbaugh_table])
     changeser_updater = hoomd.update.CustomUpdater(action=changeser_action, trigger=hoomd.trigger.Periodic(dt_try_change))
 
     # ## SET SIMULATION OPERATIONS
     sim.operations.integrator = integrator 
     sim.operations.computes.append(therm_quantities)
-
-    sim.run(2400000)
 
     sim.operations.writers.append(dump_gsd)
     sim.operations.writers.append(active_ser_gsd)
@@ -239,5 +249,5 @@ if __name__=='__main__':
     sim.operations += time_writer
     sim.operations += changeser_updater
 
-    sim.run(production_steps-2400000)
+    sim.run(production_steps)
     
