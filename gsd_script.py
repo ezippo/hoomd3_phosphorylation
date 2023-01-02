@@ -2,9 +2,8 @@
 # -*- coding: utf-8 -*-
 
 import gsd, gsd.hoomd
+print('a')
+traj = gsd.hoomd.open("therm1_ck1d-rigid_multi-tdp43restart1.gsd", 'rb')
+print('b')
+print(len(traj))
 
-traj = gsd.hoomd.open("ck1d-rigid_tdp43_ex7_dump.gsd", 'rb')
-
-print(traj[0].log.keys())
-print(traj[0].particles.typeid)
-print(traj[13].particles.typeid)
