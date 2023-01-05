@@ -22,7 +22,7 @@ temp = production_T*0.00831446      # Temp is RT [kJ/mol]
 box_lenght=50
 seed = 4567     #np.random.randint(0, 65535) 
 CONTACT = 1.0
-Dmu = -48.0
+Dmu = -48.0     # mu_adp - mu_atp in cells
 
 # Files
 stat_file = 'input_stats/stats_module.dat'
