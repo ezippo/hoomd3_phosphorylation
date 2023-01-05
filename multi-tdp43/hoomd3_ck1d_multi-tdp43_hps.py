@@ -34,11 +34,10 @@ logfile = 'ck1d-rigid_multi-tdp43_exl'+str(ex_number)
 
 # Logging time interval
 dt_dump = 2000000
-dt_active_ser = 2000000
 dt_log = 10000000
 dt_backup = 10000000
-
 dt_try_change = 200
+dt_time = 1000000
 
 contacts = []
 
@@ -55,9 +54,10 @@ class PrintTimestep(hoomd.custom.Action):
 
 class ChangeSerine(hoomd.custom.Action):
 
-    def __init__(self, active_serials, ser_serials, glb_contacts):
+    def __init__(self, active_serials, ser_serials, forces, glb_contacts):
         self._active_serials = active_serials
         self._ser_serials = ser_serials
+        self._forces = forces
         self._glb_contacts = glb_contacts
 
     def act(self, timestep):
@@ -231,9 +231,9 @@ if __name__=='__main__':
     print(f"Initial time: {time.time()-time_start}")
     time_start = time.time()
     time_action = PrintTimestep(time_start)
-    time_writer = hoomd.write.CustomWriter(action=time_action, trigger=hoomd.trigger.Periodic(100000))
+    time_writer = hoomd.write.CustomWriter(action=time_action, trigger=hoomd.trigger.Periodic(dt_time))
     
-    changeser_action = ChangeSerine(active_serials=activeCK1d_serials, ser_serials=ser_serials, glb_contacts=contacts)
+    changeser_action = ChangeSerine(active_serials=activeCK1d_serials, ser_serials=ser_serials, forces=[yukawa, ashbaugh_table], glb_contacts=contacts)
     changeser_updater = hoomd.update.CustomUpdater(action=changeser_action, trigger=hoomd.trigger.Periodic(dt_try_change))
     
     # ## SET SIMULATION OPERATIONS

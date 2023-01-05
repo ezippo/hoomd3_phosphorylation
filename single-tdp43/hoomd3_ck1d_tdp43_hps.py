@@ -55,9 +55,10 @@ class PrintTimestep(hoomd.custom.Action):
 
 class ChangeSerine(hoomd.custom.Action):
 
-    def __init__(self, active_serials, ser_serials):
+    def __init__(self, active_serials, ser_serials, forces):
         self._active_serials = active_serials
         self._ser_serials = ser_serials
+        self._forces = forces
 
     def act(self, timestep):
         snap = self._state.get_snapshot()
