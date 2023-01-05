@@ -41,6 +41,13 @@ dt_backup = 10000000
 dt_try_change = 200
 
 
+def metropolis_boltzmann(dU, dmu, beta=2.494338):
+    x = np.random.rand()
+    if np.log(x) <= -beta*(dU+dmu):
+        return True
+    else:
+        return False
+
 
 # ### CUSTOM ACTIONS
 class PrintTimestep(hoomd.custom.Action):
@@ -74,7 +81,7 @@ class ChangeSerine(hoomd.custom.Action):
                 snap.particles.typeid[ser_index] = 20
                 self._state.set_snapshot(snap)
                 U_fin = self._forces[0].energy + self._forces[1].energy
-                if hu.metropolis_boltzmann(U_fin-U_in, Dmu, temp):
+                if metropolis_boltzmann(U_fin-U_in, Dmu, temp):
                     print(f"Phosphorylation occured: SER id {ser_index}")
                 else:
                     snap.particles.typeid[ser_index] = 15

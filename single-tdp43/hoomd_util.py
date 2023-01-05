@@ -284,12 +284,6 @@ def compute_center(pos):
     center_pos = np.array([ np.sum(pos[:,i])/n for i in range(3) ])
     return center_pos
 
-def metropolis_boltzmann(dU, dmu, beta=2.494338):
-    x = np.random.rand()
-    if np.log(x) <= -beta*(dU+dmu):
-        return True
-    else:
-        return False
 
 
 if __name__=='__main__':

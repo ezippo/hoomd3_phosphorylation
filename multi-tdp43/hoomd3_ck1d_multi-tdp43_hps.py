@@ -41,6 +41,14 @@ dt_time = 1000000
 
 contacts = []
 
+
+def metropolis_boltzmann(dU, dmu, beta=2.494338):
+    x = np.random.rand()
+    if np.log(x) <= -beta*(dU+dmu):
+        return True
+    else:
+        return False
+
 # ### CUSTOM ACTIONS
 class PrintTimestep(hoomd.custom.Action):
 
@@ -68,22 +76,24 @@ class ChangeSerine(hoomd.custom.Action):
 
         if np.min(dist)<contact_dist:
             ser_index = self._ser_serials[np.argmin(dist)]
-            self._glb_contacts += [[ser_index, timestep]]
 
             if snap.particles.typeid[ser_index]==15:
                 U_in = self._forces[0].energy + self._forces[1].energy
                 snap.particles.typeid[ser_index] = 20
                 self._state.set_snapshot(snap)
                 U_fin = self._forces[0].energy + self._forces[1].energy
-                if hu.metropolis_boltzmann(U_fin-U_in, Dmu, temp):
+                if metropolis_boltzmann(U_fin-U_in, Dmu, temp):
                     print(f"Phosphorylation occured: SER id {ser_index}")
+                    self._glb_contacts += [[ser_index, timestep, 1]]
                 else:
                     snap.particles.typeid[ser_index] = 15
                     self._state.set_snapshot(snap)
                     print(f'Phosphorylation SER id {ser_index} not accepted')
+                    self._glb_contacts += [[ser_index, timestep, 0]]
 
             elif snap.particles.typeid[ser_index]==20:
                 print(f"SER {ser_index} already phosphorylated")
+                self._glb_contacts += [[ser_index, timestep, 2]]
 
             else:
                 print(f"ERROR: residue {ser_index} is not a serine!")
@@ -249,5 +259,5 @@ if __name__=='__main__':
 
     sim.run(production_steps)
     
-    np.savetxt(logfile+"_contacts.txt", contacts)
+    np.savetxt(logfile+"_contacts.txt", contacts, fmt='%d')
     
