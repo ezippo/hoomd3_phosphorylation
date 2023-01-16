@@ -16,12 +16,12 @@ import hoomd_util as hu
 # ### MACROs
 # Simulation parameters
 production_dt=0.01       # Time step for production run in picoseconds
-production_steps=25000   # Total number of steps 
+production_steps=100   # Total number of steps 
 production_T=300         # Temperature for production run in Kelvin
 temp = production_T*0.00831446      # Temp is RT [kJ/mol]
 box_lenght=200
 seed = 4567     #np.random.randint(0, 65535) 
-contact_dist = 1.0
+contact_dist = 50.0
 Dmu = -48.0     # mu_adp - mu_atp in cells
 
 # Files
@@ -36,11 +36,10 @@ logfile = 'ck1d-rigid_multi-tdp43_exl'+str(ex_number)
 dt_dump = 2000000
 dt_log = 10000000
 dt_backup = 10000000
-dt_try_change = 200
-dt_time = 1000000
+dt_try_change = 10
+dt_time = 10
 
 contacts = []
-
 
 def metropolis_boltzmann(dU, dmu, beta=2.494338):
     x = np.random.rand()
@@ -48,6 +47,7 @@ def metropolis_boltzmann(dU, dmu, beta=2.494338):
         return True
     else:
         return False
+                    
 
 # ### CUSTOM ACTIONS
 class PrintTimestep(hoomd.custom.Action):
@@ -90,7 +90,7 @@ class ChangeSerine(hoomd.custom.Action):
                     self._state.set_snapshot(snap)
                     print(f'Phosphorylation SER id {ser_index} not accepted')
                     self._glb_contacts += [[ser_index, timestep, 0]]
-
+                    
             elif snap.particles.typeid[ser_index]==20:
                 print(f"SER {ser_index} already phosphorylated")
                 self._glb_contacts += [[ser_index, timestep, 2]]
