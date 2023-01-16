@@ -1,0 +1,13 @@
+#!/bin/bash
+
+arr=()
+while read -r line
+do
+    arr+=(${line})
+done < seeds.txt
+
+for INDEX in 1 2 3 
+do
+    SEED=${arr[${INDEX}-1]}
+    sed "s/SEED/${SEED}/" template | sed "s/INDEX/${INDEX}/" | sed "s/INDEX/${INDEX}/"  > input_test${INDEX}.in
+done

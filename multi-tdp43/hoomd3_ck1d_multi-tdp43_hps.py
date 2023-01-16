@@ -137,7 +137,8 @@ if __name__=='__main__':
     type_id = snap.particles.typeid
     ser_serials = np.where(type_id[:30801]==15)[0]
     print(ser_serials)
-    activeCK1d_serials = [30800+147, 30800+148, 30801+149]    # ASP-149, PHE=150, GLY-151
+    activeCK1d_serials = [30800+147, 30800+148, 30800+149]    # ASP-149, PHE=150, GLY-151
+    print(type_id[activeCK1d_serials])
     
     # # rigid body
     rigid = hoomd.md.constrain.Rigid()
