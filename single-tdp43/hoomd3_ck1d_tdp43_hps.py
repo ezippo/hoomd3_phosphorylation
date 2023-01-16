@@ -16,29 +16,36 @@ import hoomd_util as hu
 # ### MACROs
 # Simulation parameters
 production_dt=0.01       # Time step for production run in picoseconds
-production_steps=20000   # Total number of steps 
+production_steps=10000   # Total number of steps 
 production_T=300         # Temperature for production run in Kelvin
 temp = production_T*0.00831446      # Temp is RT [kJ/mol]
 box_lenght=50
 seed = 4567     #np.random.randint(0, 65535) 
-CONTACT = 1.0
+CONTACT = 100.0
+Dmu = 0.0
 
 # Files
 stat_file = 'input_stats/stats_module.dat'
 filein_ck1d = 'input_stats/CA_ck1delta.pdb'
 #ex_number = sys.argv[1]
-ex_number = 11
+ex_number = 10
 file_start = 'input_stats/ck1d-rigid_tdp43_start.gsd'
 logfile = 'ck1d-rigid_tdp43_exl'+str(ex_number)
 
 # Logging time interval
-dt_dump = 2000000
+dt_dump = 200
 dt_active_ser = 2000000
 dt_log = 10000000
 dt_backup = 10000000
 
 dt_try_change = 200
 
+def metropolis_boltzmann(dU, dmu, beta=2.494338):
+    x = np.random.rand()
+    if np.log(x) <= -beta*(dU+dmu):
+        return True
+    else:
+        return False
 
 
 # ### CUSTOM ACTIONS
@@ -54,26 +61,40 @@ class PrintTimestep(hoomd.custom.Action):
 
 class ChangeSerine(hoomd.custom.Action):
 
-    def __init__(self, active_serials, ser_serials):
+    def __init__(self, active_serials, ser_serials, forces):
         self._active_serials = active_serials
         self._ser_serials = ser_serials
-
+        self._forces = forces
+        
     def act(self, timestep):
         snap = self._state.get_snapshot()
         positions = snap.particles.position
         active_pos = hu.compute_center(positions[self._active_serials])
         dist = hu.compute_distances(active_pos, positions[self._ser_serials])
+
         if np.min(dist)<CONTACT:
             ser_index = self._ser_serials[np.argmin(dist)]
+
             if snap.particles.typeid[ser_index]==15:
+                U_in = self._forces[0].energy + self._forces[1].energy
                 snap.particles.typeid[ser_index] = 20
-                print(f"Phosphorylation occured: SER id {ser_index}")
                 self._state.set_snapshot(snap)
+                U_fin = self._forces[0].energy + self._forces[1].energy
+                print(f'{U_in} , {U_fin}')
+                if metropolis_boltzmann(U_fin-U_in, Dmu, temp):
+                    print(f"Phosphorylation occured: SER id {ser_index}")
+                else:
+                    snap.particles.typeid[ser_index] = 15
+                    self._state.set_snapshot(snap)
+                    print(f'Phosphorylation SER id {ser_index} not accepted')
+
             elif snap.particles.typeid[ser_index]==20:
                 print(f"SER {ser_index} already phosphorylated")
-            else:
-                print(f"ERROR: residue {ser_index} is not a serine! ")
 
+            else:
+                print(f"ERROR: residue {ser_index} is not a serine!")
+        
+                
 
 # --------------------------- MAIN ------------------------------
 
@@ -209,7 +230,7 @@ if __name__=='__main__':
                                   mode='wb', truncate=True, log=sim_info_log)
     
     # thermodynamical quantities
-    therm_quantities = hoomd.md.compute.ThermodynamicQuantities(filter=all_group)
+    therm_quantities = hoomd.md.compute.ThermodynamicQuantities(filter=moving_group)
     tq_log = hoomd.logging.Logger()
     tq_log.add(therm_quantities)
     tq_gsd = hoomd.write.GSD(trigger=hoomd.trigger.Periodic(dt_log), 
@@ -221,13 +242,13 @@ if __name__=='__main__':
     time_start = time.time()
     time_action = PrintTimestep(time_start)
     time_writer = hoomd.write.CustomWriter(action=time_action, trigger=hoomd.trigger.Periodic(1000))
-    changeser_action = ChangeSerine(active_serials=activeCK1d_serials, ser_serials=ser_serials)
+    changeser_action = ChangeSerine(active_serials=activeCK1d_serials, ser_serials=ser_serials, forces=[yukawa, ashbaugh_table])
     changeser_updater = hoomd.update.CustomUpdater(action=changeser_action, trigger=hoomd.trigger.Periodic(dt_try_change))
-
+    
     # ## SET SIMULATION OPERATIONS
     sim.operations.integrator = integrator 
     sim.operations.computes.append(therm_quantities)
-
+    
     sim.operations.writers.append(dump_gsd)
     sim.operations.writers.append(active_ser_gsd)
     sim.operations.writers.append(active_ser_gsd)
@@ -236,6 +257,6 @@ if __name__=='__main__':
     sim.operations.writers.append(tq_gsd)
     sim.operations += time_writer
     sim.operations += changeser_updater
-
+    
     sim.run(production_steps)
     
