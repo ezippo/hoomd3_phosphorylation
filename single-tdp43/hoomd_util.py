@@ -285,7 +285,6 @@ def compute_center(pos):
     return center_pos
 
 
-
 if __name__=='__main__':
     print(Ulist_ashbaugh(0.5, 0.5, 2.5, 0.2, 200))
     print(Flist_ashbaugh(0.5, 0.5, 2.5, 0.2, 200))
