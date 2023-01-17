@@ -1,20 +1,22 @@
 # Simulation parameters
-production_dt	0.01       # Time step for production run in picoseconds
-therm_steps 	200000000   # Total number of steps 
-production_T 	300         # Temperature for production run in Kelvin
-box_lenght	    200
-start 	    	1	   # 0 -> new simulation, 1 -> restart
-
-seed 		SEED
+production_dt   0.01       # Time step for production run in picoseconds
+therm_steps 200000000   # Total number of steps 
+production_T    300         # Temperature for production run in Kelvin
+box_lenght  200
+start   1	   # 0 -> new simulation, 1 -> restart
+contact_dist  1.0
+Dmu  -48.0     # mu_adp - mu_atp in cells
+seed    SEED
 
 # Files
-stat_file	input_stats/stats_module.dat
-filein_ck1d	input_stats/CA_ck1delta.pdb
-file_start 	sim_INDEX/thermalized_ck1d-rigid_multi-tdp43_startINDEX.gsd
-logfile		sim_INDEX/thermINDEX_ck1d-rigid_multi-tdp43
+stat_file   input_stats/stats_module.dat
+filein_ck1d input_stats/CA_ck1delta.pdb
+file_start  sim_INDEX/thermalized_ck1d-rigid_multi-tdp43_startINDEX.gsd
+logfile sim_INDEX/thermINDEX_ck1d-rigid_multi-tdp43
 
 # Logging time interval
-dt_dump        200000
-dt_log 	       10000000
-dt_backup      10000000
-dt_time        1000000
+dt_dump 200000
+dt_log  10000000
+dt_backup   10000000
+dt_try_change    200 
+dt_time 1000000

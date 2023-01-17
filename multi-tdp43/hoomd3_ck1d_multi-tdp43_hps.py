@@ -9,36 +9,6 @@ import gsd, gsd.hoomd
 
 import hoomd_util as hu
 
-# UNITS: distance -> nm   (!!!positions and sigma in files are in agstrom!!!)
-#        mass -> amu
-#        energy -> kJ/mol
-
-# ### MACROs
-# Simulation parameters
-production_dt=0.01       # Time step for production run in picoseconds
-production_steps=100   # Total number of steps 
-production_T=300         # Temperature for production run in Kelvin
-temp = production_T*0.00831446      # Temp is RT [kJ/mol]
-box_lenght=200
-seed = 4567     #np.random.randint(0, 65535) 
-contact_dist = 50.0
-Dmu = -48.0     # mu_adp - mu_atp in cells
-
-# Files
-stat_file = 'input_stats/stats_module.dat'
-filein_ck1d = 'input_stats/CA_ck1delta.pdb'
-#ex_number = sys.argv[1]
-ex_number = 0
-file_start = 'input_stats/ck1d-rigid_multi-tdp43_start.gsd'
-logfile = 'ck1d-rigid_multi-tdp43_exl'+str(ex_number)
-
-# Logging time interval
-dt_dump = 2000000
-dt_log = 10000000
-dt_backup = 10000000
-dt_try_change = 10
-dt_time = 10
-
 contacts = []
 
 def metropolis_boltzmann(dU, dmu, beta=2.494338):
@@ -104,6 +74,36 @@ class ChangeSerine(hoomd.custom.Action):
 if __name__=='__main__':
     # TIME START
     time_start = time.time()
+
+    # UNITS: distance -> nm   (!!!positions and sigma in files are in agstrom!!!)
+    #        mass -> amu
+    #        energy -> kJ/mol
+    #
+    # ### MACROs from file
+    input_file = sys.argv[1]
+    macro_dict = hu.macros_from_file(input_file)
+    # Simulation parameters
+    production_dt = float(macro_dict['production_dt'])        # Time step for production run in picoseconds
+    therm_steps = int(macro_dict['therm_steps'])                       # Total number of steps 
+    production_T = float(macro_dict['production_T'])                      # Temperature for production run in Kelvin
+    temp = production_T * 0.00831446                  # Temp is RT [kJ/mol]
+    box_lenght = int(macro_dict['box_lenght'])
+    start = int(macro_dict['start'])	                           # 0 -> new simulation, 1 -> restart
+    contact_dist = float(macro_dict['contact_dist'])
+    Dmu = float(macro_dict['Dmu'])
+    seed = int(macro_dict['seed'])
+    # Files
+    stat_file = macro_dict['stat_file']
+    filein_ck1d = macro_dict['filein_ck1d']
+    file_start = macro_dict['file_start']
+    logfile = macro_dict['logfile']
+    # Logging time interval
+    dt_dump = int(macro_dict['dt_dump'])
+    dt_log = int(macro_dict['dt_log'])
+    dt_backup = int(macro_dict['dt_backup'])
+    dt_try_change = int(macro_dict['dt_try_change'])
+    dt_time = int(macro_dict['dt_time'])
+
 
     # ### Input parameters for all the amino acids 
     aa_param_dict = hu.aa_stats_from_file(stat_file)
