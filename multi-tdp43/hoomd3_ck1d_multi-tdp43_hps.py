@@ -133,6 +133,10 @@ if __name__=='__main__':
     sim.create_state_from_gsd(filename=file_start)
     snap = sim.state.get_snapshot()
     ck1d_mass = snap.particles.mass[0]
+    if start==1:
+        init_step = sim.initial_timestep
+    elif start==0:
+        init_step = 0
     
     type_id = snap.particles.typeid
     ser_serials = np.where(type_id[:30801]==15)[0]
@@ -223,10 +227,10 @@ if __name__=='__main__':
     sim_info_log = hoomd.logging.Logger()
     sim_info_log.add(sim)
     backup1_gsd = hoomd.write.GSD(trigger=hoomd.trigger.Periodic(dt_backup), 
-                                  filename='restart_tmp1_exl'+str(ex_number)+'.gsd', filter=all_group,
+                                  filename=logfile+'_restart1.gsd', filter=all_group,
                                   mode='wb', truncate=True, log=sim_info_log)
     backup2_gsd = hoomd.write.GSD(trigger=hoomd.trigger.Periodic(dt_backup, phase=int(dt_backup/2.)), 
-                                  filename='restart_tmp2_exl'+str(ex_number)+'.gsd', filter=all_group,
+                                  filename=logfile+'_restart2.gsd', filter=all_group,
                                   mode='wb', truncate=True, log=sim_info_log)
     
     
@@ -258,7 +262,7 @@ if __name__=='__main__':
     sim.operations += time_writer
     sim.operations += changeser_updater
 
-    sim.run(production_steps)
+    sim.run(production_steps-init_step)
     
     np.savetxt(logfile+"_contacts.txt", contacts, fmt='%d')
     
