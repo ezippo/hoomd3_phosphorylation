@@ -9,33 +9,6 @@ import gsd, gsd.hoomd
 
 import hoomd_util as hu
 
-'''
-# Simulation parameters
-production_dt=0.01       # Time step for production run in picoseconds
-therm_steps=2000   # Total number of steps 
-production_T=300         # Temperature for production run in Kelvin
-temp = production_T*0.00831446      # Temp is RT [kJ/mol]
-box_lenght=200
-seed = 4567     #np.random.randint(0, 65535) 
-
-
-# Files
-stat_file = 'input_stats/stats_module.dat'
-filein_ck1d = 'input_stats/CA_ck1delta.pdb'
-#ex_number = sys.argv[1]
-ex_number = 0
-file_start = 'input_stats/ck1d-rigid_multi-tdp43_start.gsd'
-logfile = 'therm_ck1d-rigid_multi-tdp43_exl'+str(ex_number)
-
-# Logging time interval
-dt_dump = 200
-dt_log = 1000
-dt_backup = 1000000
-'''
-
-
-
-
 
 # ### CUSTOM ACTIONS
 class PrintTimestep(hoomd.custom.Action):
@@ -47,7 +20,6 @@ class PrintTimestep(hoomd.custom.Action):
         current_time = time.time()
         current_time = current_time - self._t_start
         print(f"Elapsed time {current_time} | Step {timestep}/{therm_steps} " )
-
 
 
 # --------------------------- MAIN ------------------------------
@@ -65,7 +37,7 @@ if __name__=='__main__':
     macro_dict = hu.macros_from_file(input_file)
     # Simulation parameters
     production_dt = float(macro_dict['production_dt'])        # Time step for production run in picoseconds
-    therm_steps = int(macro_dict['therm_steps'])                       # Total number of steps 
+    therm_steps = int(macro_dict['production_steps'])                       # Total number of steps 
     production_T = float(macro_dict['production_T'])                      # Temperature for production run in Kelvin
     temp = production_T * 0.00831446                  # Temp is RT [kJ/mol]
     box_lenght = int(macro_dict['box_lenght'])
@@ -82,7 +54,7 @@ if __name__=='__main__':
     dt_backup = int(macro_dict['dt_backup'])
     dt_time = int(macro_dict['dt_time'])
 
-
+    
     # ### Input parameters for all the amino acids 
     aa_param_dict = hu.aa_stats_from_file(stat_file)
     aa_type = list(aa_param_dict.keys())
@@ -106,7 +78,7 @@ if __name__=='__main__':
     
     # ### HOOMD3 routine
     # ## INITIALIZATION
-    device = hoomd.device.CPU()
+    device = hoomd.device.GPU()
     sim = hoomd.Simulation(device=device, seed=seed)    
     sim.create_state_from_gsd(filename=file_start)
     snap = sim.state.get_snapshot()
@@ -192,8 +164,7 @@ if __name__=='__main__':
     # ## LOGGING
     # dump files
     dump_gsd = hoomd.write.GSD(trigger=hoomd.trigger.Periodic(dt_dump), 
-                               filename=logfile+'_dump.gsd', filter=all_group,
-                               dynamic=['property', 'momentum', 'attribute', 'topology'])                  # you can add [attributes(particles/typeid)] to trace phosphorylation
+                               filename=logfile+'_dumpC.gsd', filter=all_group)                  # you can add [attributes(particles/typeid)] to trace phosphorylation
 
     # back-up files
     sim_info_log = hoomd.logging.Logger()
@@ -205,13 +176,12 @@ if __name__=='__main__':
                                   filename=logfile+'_restart2.gsd', filter=all_group,
                                   mode='wb', truncate=True, log=sim_info_log)
     
-    
     # thermodynamical quantities
     therm_quantities = hoomd.md.compute.ThermodynamicQuantities(filter=all_group)
     tq_log = hoomd.logging.Logger()
     tq_log.add(therm_quantities)
     tq_gsd = hoomd.write.GSD(trigger=hoomd.trigger.Periodic(dt_log), 
-                             filename=logfile+'_log.gsd', filter=hoomd.filter.Null(),
+                             filename=logfile+'_logC.gsd', filter=hoomd.filter.Null(),
                              log=tq_log)
     
     # # Custom action
@@ -232,3 +202,4 @@ if __name__=='__main__':
 
     sim.run(therm_steps-init_step)
     
+    hoomd.write.GSD.write(state=sim.state, filename=logfile+'_end.gsd')

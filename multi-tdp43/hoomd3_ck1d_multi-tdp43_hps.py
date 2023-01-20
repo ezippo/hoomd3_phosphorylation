@@ -9,6 +9,7 @@ import gsd, gsd.hoomd
 
 import hoomd_util as hu
 
+
 contacts = []
 
 def metropolis_boltzmann(dU, dmu, beta=2.494338):
@@ -84,7 +85,7 @@ if __name__=='__main__':
     macro_dict = hu.macros_from_file(input_file)
     # Simulation parameters
     production_dt = float(macro_dict['production_dt'])        # Time step for production run in picoseconds
-    therm_steps = int(macro_dict['therm_steps'])                       # Total number of steps 
+    production_steps = int(macro_dict['production_steps'])                       # Total number of steps 
     production_T = float(macro_dict['production_T'])                      # Temperature for production run in Kelvin
     temp = production_T * 0.00831446                  # Temp is RT [kJ/mol]
     box_lenght = int(macro_dict['box_lenght'])
@@ -103,7 +104,7 @@ if __name__=='__main__':
     dt_backup = int(macro_dict['dt_backup'])
     dt_try_change = int(macro_dict['dt_try_change'])
     dt_time = int(macro_dict['dt_time'])
-
+    
 
     # ### Input parameters for all the amino acids 
     aa_param_dict = hu.aa_stats_from_file(stat_file)
@@ -128,7 +129,7 @@ if __name__=='__main__':
     
     # ### HOOMD3 routine
     # ## INITIALIZATION
-    device = hoomd.device.CPU()
+    device = hoomd.device.GPU()
     sim = hoomd.Simulation(device=device, seed=seed)    
     sim.create_state_from_gsd(filename=file_start)
     snap = sim.state.get_snapshot()
@@ -140,9 +141,7 @@ if __name__=='__main__':
     
     type_id = snap.particles.typeid
     ser_serials = np.where(type_id[:30801]==15)[0]
-    print(ser_serials)
-    activeCK1d_serials = [30800+147, 30800+148, 30800+149]    # ASP-149, PHE=150, GLY-151
-    print(type_id[activeCK1d_serials])
+    activeCK1d_serials = [30800+147, 30800+148, 30800+149]     # [171, 204, 301, 302, 303, 304, 305]
     
     # # rigid body
     rigid = hoomd.md.constrain.Rigid()
@@ -157,9 +156,6 @@ if __name__=='__main__':
     # # groups
     all_group = hoomd.filter.All()
     moving_group = hoomd.filter.Rigid(("center", "free"))
-    #ser_group = hoomd.filter.Tags(list(ser_serials))
-    #active_group = hoomd.filter.Tags(activeCK1d_serials)
-    #active_ser_group = hoomd.filter.Union(active_group, ser_group)
     
     # ## PAIR INTERACTIONS
     cell = hoomd.md.nlist.Cell(buffer=0.4, exclusions=('bond', 'body'))
@@ -265,4 +261,5 @@ if __name__=='__main__':
     sim.run(production_steps-init_step)
     
     np.savetxt(logfile+"_contacts.txt", contacts, fmt='%d')
+    hoomd.write.GSD.write(state=sim.state, filename=logfile+'_end.gsd')
     
