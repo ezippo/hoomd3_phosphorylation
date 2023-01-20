@@ -83,10 +83,6 @@ if __name__=='__main__':
     sim.create_state_from_gsd(filename=file_start)
     snap = sim.state.get_snapshot()
     ck1d_mass = snap.particles.mass[0]
-    if start==1:
-        init_step = sim.initial_timestep
-    elif start==0:
-        init_step = 0
     
     # # rigid body
     rigid = hoomd.md.constrain.Rigid()
@@ -102,8 +98,11 @@ if __name__=='__main__':
     all_group = hoomd.filter.All()
     moving_group = hoomd.filter.Rigid(("center", "free"))
 
-    # gaussian distributed initial velocities 
-    sim.state.thermalize_particle_momenta(filter=all_group, kT=temp)
+    if start==1:
+        init_step = sim.initial_timestep
+    elif start==0:
+        init_step = 0
+        sim.state.thermalize_particle_momenta(filter=all_group, kT=temp)    # gaussian distributed initial velocities 
     
     # ## PAIR INTERACTIONS
     cell = hoomd.md.nlist.Cell(buffer=0.4, exclusions=('bond', 'body'))
