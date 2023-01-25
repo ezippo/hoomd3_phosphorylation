@@ -70,6 +70,15 @@ class ChangeSerine(hoomd.custom.Action):
                 print(f"ERROR: residue {ser_index} is not a serine!")
 
 
+class ContactsBackUp(hoomd.custom.Action):
+
+    def __init__(self, glb_contacts):
+        self._glb_contacts = glb_contacts
+
+    def act(self, timestep):
+        np.savetxt(logfile+"_contactsBCKP.txt", self._glb_contacts, fmt='%d')
+
+
 # --------------------------- MAIN ------------------------------
 
 if __name__=='__main__':
@@ -129,7 +138,7 @@ if __name__=='__main__':
     
     # ### HOOMD3 routine
     # ## INITIALIZATION
-    device = hoomd.device.GPU()
+    device = hoomd.device.CPU()                           # or GPU() if you need
     sim = hoomd.Simulation(device=device, seed=seed)    
     sim.create_state_from_gsd(filename=file_start)
     snap = sim.state.get_snapshot()
@@ -246,6 +255,9 @@ if __name__=='__main__':
     
     changeser_action = ChangeSerine(active_serials=activeCK1d_serials, ser_serials=ser_serials, forces=[yukawa, ashbaugh_table], glb_contacts=contacts)
     changeser_updater = hoomd.update.CustomUpdater(action=changeser_action, trigger=hoomd.trigger.Periodic(dt_try_change))
+
+    contacts_action = ContactsBackUp(glb_contacts=contacts)
+    contacts_bckp_writer = hoomd.write.CustomWriter(action=contacts_action, trigger=hoomd.trigger.Periodic(dt_backup))
     
     # ## SET SIMULATION OPERATIONS
     sim.operations.integrator = integrator 
@@ -257,6 +269,7 @@ if __name__=='__main__':
     sim.operations.writers.append(tq_gsd)
     sim.operations += time_writer
     sim.operations += changeser_updater
+    sim.operations += contacts_bckp_writer
 
     sim.run(production_steps-init_step)
     
