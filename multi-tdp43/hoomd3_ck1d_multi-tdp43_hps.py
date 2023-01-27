@@ -138,7 +138,7 @@ if __name__=='__main__':
     
     # ### HOOMD3 routine
     # ## INITIALIZATION
-    device = hoomd.device.CPU()                           # or GPU() if you need
+    device = hoomd.device.CPU(notice_level=1)                           # or GPU() if you need
     sim = hoomd.Simulation(device=device, seed=seed)    
     sim.create_state_from_gsd(filename=file_start)
     snap = sim.state.get_snapshot()
@@ -273,6 +273,11 @@ if __name__=='__main__':
 
     sim.run(production_steps-init_step)
     
-    np.savetxt(logfile+"_contacts.txt", contacts, fmt='%d')
+    if len(contacts)!=0:
+        if start==1:
+            cont_prev = np.loadtxt(logfile+"_contacts.txt")
+            contacts = np.append(cont_prev, contacts, axis=0)
+        np.savetxt(logfile+"_contacts.txt", contacts, fmt='%d')
+    
     hoomd.write.GSD.write(state=sim.state, filename=logfile+'_end.gsd')
     
