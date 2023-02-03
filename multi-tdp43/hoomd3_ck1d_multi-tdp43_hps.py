@@ -32,12 +32,14 @@ class PrintTimestep(hoomd.custom.Action):
         print(f"Elapsed time {current_time} | Step {timestep}/{production_steps} " )
 
 class ChangeSerine(hoomd.custom.Action):
-
-    def __init__(self, active_serials, ser_serials, forces, glb_contacts):
+    
+    def __init__(self, active_serials, ser_serials, forces, glb_contacts, temp, Dmu):
         self._active_serials = active_serials
         self._ser_serials = ser_serials
         self._forces = forces
         self._glb_contacts = glb_contacts
+        self._temp = temp
+        self._Dmu = Dmu
 
     def act(self, timestep):
         snap = self._state.get_snapshot()
@@ -53,7 +55,7 @@ class ChangeSerine(hoomd.custom.Action):
                 snap.particles.typeid[ser_index] = 20
                 self._state.set_snapshot(snap)
                 U_fin = self._forces[0].energy + self._forces[1].energy
-                if metropolis_boltzmann(U_fin-U_in, Dmu, temp):
+                if metropolis_boltzmann(U_fin-U_in, self._Dmu, self._temp):
                     print(f"Phosphorylation occured: SER id {ser_index}")
                     self._glb_contacts += [[ser_index, timestep, 1]]
                 else:
@@ -63,8 +65,18 @@ class ChangeSerine(hoomd.custom.Action):
                     self._glb_contacts += [[ser_index, timestep, 0]]
                     
             elif snap.particles.typeid[ser_index]==20:
-                print(f"SER {ser_index} already phosphorylated")
-                self._glb_contacts += [[ser_index, timestep, 2]]
+                U_in = self._forces[0].energy + self._forces[1].energy
+                snap.particles.typeid[ser_index] = 15
+                self._state.set_snapshot(snap)
+                U_fin = self._forces[0].energy + self._forces[1].energy
+                if metropolis_boltzmann(U_fin-U_in, -self._Dmu, self._temp):
+                    print(f"Dephosphorylation occured: SER id {ser_index}")
+                    self._glb_contacts += [[ser_index, timestep, -1]]
+                else:
+                    snap.particles.typeid[ser_index] = 15
+                    self._state.set_snapshot(snap)
+                    print(f'Dephosphorylation SER id {ser_index} not accepted')
+                    self._glb_contacts += [[ser_index, timestep, 2]]
 
             else:
                 print(f"ERROR: residue {ser_index} is not a serine!")
@@ -253,7 +265,7 @@ if __name__=='__main__':
     time_action = PrintTimestep(time_start)
     time_writer = hoomd.write.CustomWriter(action=time_action, trigger=hoomd.trigger.Periodic(dt_time))
     
-    changeser_action = ChangeSerine(active_serials=activeCK1d_serials, ser_serials=ser_serials, forces=[yukawa, ashbaugh_table], glb_contacts=contacts)
+    changeser_action = ChangeSerine(active_serials=activeCK1d_serials, ser_serials=ser_serials, forces=[yukawa, ashbaugh_table], glb_contacts=contacts, temp=temp, Dmu=Dmu)
     changeser_updater = hoomd.update.CustomUpdater(action=changeser_action, trigger=hoomd.trigger.Periodic(dt_try_change))
 
     contacts_action = ContactsBackUp(glb_contacts=contacts)
