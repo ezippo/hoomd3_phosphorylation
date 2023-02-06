@@ -6,6 +6,7 @@ import time
 import numpy as np
 import hoomd
 import gsd, gsd.hoomd
+import logging
 
 import hoomd_util as hu
 
@@ -55,13 +56,14 @@ class ChangeSerine(hoomd.custom.Action):
                 snap.particles.typeid[ser_index] = 20
                 self._state.set_snapshot(snap)
                 U_fin = self._forces[0].energy + self._forces[1].energy
+                logging.debug(f"U_fin = {U_fin}, U_in = {U_in}")
                 if metropolis_boltzmann(U_fin-U_in, self._Dmu, self._temp):
-                    print(f"Phosphorylation occured: SER id {ser_index}")
+                    logging.info(f"Phosphorylation occured: SER id {ser_index}")
                     self._glb_contacts += [[ser_index, timestep, 1]]
                 else:
                     snap.particles.typeid[ser_index] = 15
                     self._state.set_snapshot(snap)
-                    print(f'Phosphorylation SER id {ser_index} not accepted')
+                    logging.info(f'Phosphorylation SER id {ser_index} not accepted')
                     self._glb_contacts += [[ser_index, timestep, 0]]
                     
             elif snap.particles.typeid[ser_index]==20:
@@ -69,17 +71,18 @@ class ChangeSerine(hoomd.custom.Action):
                 snap.particles.typeid[ser_index] = 15
                 self._state.set_snapshot(snap)
                 U_fin = self._forces[0].energy + self._forces[1].energy
+                logging.debug(f"U_fin = {U_fin}, U_in = {U_in}")
                 if metropolis_boltzmann(U_fin-U_in, -self._Dmu, self._temp):
-                    print(f"Dephosphorylation occured: SER id {ser_index}")
+                    logging.info(f"Dephosphorylation occured: SER id {ser_index}")
                     self._glb_contacts += [[ser_index, timestep, -1]]
                 else:
                     snap.particles.typeid[ser_index] = 15
                     self._state.set_snapshot(snap)
-                    print(f'Dephosphorylation SER id {ser_index} not accepted')
+                    logging.info(f'Dephosphorylation SER id {ser_index} not accepted')
                     self._glb_contacts += [[ser_index, timestep, 2]]
 
             else:
-                print(f"ERROR: residue {ser_index} is not a serine!")
+                raise Exception(f"Residue {ser_index} is not a serine!")
 
 
 class ContactsBackUp(hoomd.custom.Action):
@@ -96,6 +99,7 @@ class ContactsBackUp(hoomd.custom.Action):
 if __name__=='__main__':
     # TIME START
     time_start = time.time()
+    logging.basicConfig(level=logging.DEBUG)
 
     # UNITS: distance -> nm   (!!!positions and sigma in files are in agstrom!!!)
     #        mass -> amu
