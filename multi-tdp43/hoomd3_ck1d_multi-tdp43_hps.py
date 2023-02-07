@@ -92,7 +92,7 @@ class ContactsBackUp(hoomd.custom.Action):
         self._glb_contacts = glb_contacts
 
     def act(self, timestep):
-        np.savetxt(logfile+"_contactsBCKP.txt", self._glb_contacts, fmt='%d', header="# timestep    SER index    acc    distance     dU  \n# acc= {0->phospho rejected, 1->phospho accepted, 2->dephospho rejected, -1->dephospho accepted} ")
+        np.savetxt(logfile+"_contactsBCKP.txt", self._glb_contacts, fmt='%f', header="# timestep    SER index    acc    distance     dU  \n# acc= {0->phospho rejected, 1->phospho accepted, 2->dephospho rejected, -1->dephospho accepted} ")
 
 
 # --------------------------- MAIN ------------------------------
@@ -100,7 +100,7 @@ class ContactsBackUp(hoomd.custom.Action):
 if __name__=='__main__':
     # TIME START
     time_start = time.time()
-    #logging.basicConfig(level=logging.DEBUG)
+    logging.basicConfig(level=logging.WARNING)
 
     # UNITS: distance -> nm   (!!!positions and sigma in files are in agstrom!!!)
     #        mass -> amu
@@ -155,7 +155,7 @@ if __name__=='__main__':
     
     # ### HOOMD3 routine
     # ## INITIALIZATION
-    device = hoomd.device.CPU(notice_level=1)                           # or GPU() if you need
+    device = hoomd.device.CPU(notice_level=2)                           # or GPU() if you need
     sim = hoomd.Simulation(device=device, seed=seed)    
     sim.create_state_from_gsd(filename=file_start)
     snap = sim.state.get_snapshot()
@@ -294,7 +294,7 @@ if __name__=='__main__':
         if start==1:
             cont_prev = np.loadtxt(logfile+"_contacts.txt")
             contacts = np.append(cont_prev, contacts, axis=0)
-        np.savetxt(logfile+"_contacts.txt", contacts, fmt='%d', header="# timestep    SER index    acc    distance     dU  \n# acc= {0->phospho rejected, 1->phospho accepted, 2->dephospho rejected, -1->dephospho accepted} ")
+        np.savetxt(logfile+"_contacts.txt", contacts, fmt='%f', header="# timestep    SER index    acc    distance     dU  \n# acc= {0->phospho rejected, 1->phospho accepted, 2->dephospho rejected, -1->dephospho accepted} ")
     
     hoomd.write.GSD.write(state=sim.state, filename=logfile+'_end.gsd')
     
