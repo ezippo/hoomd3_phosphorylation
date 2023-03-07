@@ -3,6 +3,26 @@
 
 import numpy as np
 
+def macros_from_file(infile):
+    '''
+    Parameters
+    ----------
+    infile : str
+        name of macros input file.
+
+    Returns
+    -------
+    macro_dict : dict
+        dict('macro name':macro value)
+    '''
+    macro_dict = {}
+    with open(infile, 'r') as fid:
+        for line in fid:
+            if line[0]!='#' and line[0]!='\n':
+                line_list = line.rsplit()
+                macro_dict[line_list[0]] = line_list[1]
+    return macro_dict
+
 
 def aa_stats_from_file(filename):
     '''
@@ -279,6 +299,14 @@ def compute_distances(active_center, ser_pos):
     distances = np.array([ np.sqrt( (distances[i]**2).sum() ) for i in range(n_ser)  ])
     return distances
 
+def compute_distance_pbc(ck1d_center, ser_pos, box_lenght=50):
+    dist = ser_pos-ck1d_center
+    for i in range(3):
+        if dist[i] > box_lenght/2:
+            dist[i] = box_lenght - dist[i]
+    dist = np.sqrt( (dist**2).sum() ) 
+    return dist
+
 def compute_center(pos):
     n = len(pos)
     center_pos = np.array([ np.sum(pos[:,i])/n for i in range(3) ])
@@ -286,6 +314,8 @@ def compute_center(pos):
 
 
 if __name__=='__main__':
-    print(Ulist_ashbaugh(0.5, 0.5, 2.5, 0.2, 200))
-    print(Flist_ashbaugh(0.5, 0.5, 2.5, 0.2, 200))
-    
+    dic = macros_from_file('input_test1.dat')
+    tstep = dic['production_dt']
+    b_n = int(dic['box_lenght'])
+    print(tstep)
+    print(b_n)
