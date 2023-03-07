@@ -77,7 +77,7 @@ class ChangeSerine(hoomd.custom.Action):
                     logging.info(f"Dephosphorylation occured: SER id {ser_index}")
                     self._glb_contacts += [[timestep, ser_index, -1, min_dist, U_fin-U_in]]
                 else:
-                    snap.particles.typeid[ser_index] = 15
+                    snap.particles.typeid[ser_index] = 20
                     self._state.set_snapshot(snap)
                     logging.info(f'Dephosphorylation SER id {ser_index} not accepted')
                     self._glb_contacts += [[timestep, ser_index, 2, min_dist, U_fin-U_in]]
@@ -100,7 +100,7 @@ class ContactsBackUp(hoomd.custom.Action):
 if __name__=='__main__':
     # TIME START
     time_start = time.time()
-    logging.basicConfig(level=logging.WARNING)
+    #logging.basicConfig(level=logging.DEBUG)
 
     # UNITS: distance -> nm   (!!!positions and sigma in files are in agstrom!!!)
     #        mass -> amu
@@ -155,15 +155,19 @@ if __name__=='__main__':
     
     # ### HOOMD3 routine
     # ## INITIALIZATION
-    device = hoomd.device.CPU(notice_level=2)                           # or GPU() if you need
-    sim = hoomd.Simulation(device=device, seed=seed)    
-    sim.create_state_from_gsd(filename=file_start)
-    snap = sim.state.get_snapshot()
+    device = hoomd.device.GPU(notice_level=2)
+    sim = hoomd.Simulation(device=device, seed=seed)
+    if start==0:
+        traj = gsd.hoomd.open(file_start)
+        snap = traj[0]
+        snap.configuration.step = 0
+        sim.create_state_from_snapshot(snapshot=snap)
+    elif start==1:
+        sim.create_state_from_gsd(filename=file_start)
+        snap = sim.state.get_snapshot()
+    init_step = sim.initial_timestep
+
     ck1d_mass = snap.particles.mass[0]
-    if start==1:
-        init_step = sim.initial_timestep
-    elif start==0:
-        init_step = 0
     
     type_id = snap.particles.typeid
     ser_serials = np.where(type_id[:30801]==15)[0]
@@ -274,7 +278,7 @@ if __name__=='__main__':
     changeser_updater = hoomd.update.CustomUpdater(action=changeser_action, trigger=hoomd.trigger.Periodic(dt_try_change))
 
     contacts_action = ContactsBackUp(glb_contacts=contacts)
-    contacts_bckp_writer = hoomd.write.CustomWriter(action=contacts_action, trigger=hoomd.trigger.Periodic(dt_backup))
+    contacts_bckp_writer = hoomd.write.CustomWriter(action=contacts_action, trigger=hoomd.trigger.Periodic(int(dt_backup/2)))
     
     # ## SET SIMULATION OPERATIONS
     sim.operations.integrator = integrator 
@@ -289,7 +293,7 @@ if __name__=='__main__':
     sim.operations += contacts_bckp_writer
 
     sim.run(production_steps-init_step)
-    
+#    sim.run(production_steps)
     if len(contacts)!=0:
         if start==1:
             cont_prev = np.loadtxt(logfile+"_contacts.txt")

@@ -78,7 +78,7 @@ class ChangeSerine(hoomd.custom.Action):
                     logging.info(f"Dephosphorylation occured: SER id {ser_index}")
                     self._glb_contacts += [[timestep, ser_index, -1, min_dist, U_fin-U_in]]
                 else:
-                    snap.particles.typeid[ser_index] = 15
+                    snap.particles.typeid[ser_index] = 20
                     self._state.set_snapshot(snap)
                     logging.info(f'Dephosphorylation SER id {ser_index} not accepted')
                     self._glb_contacts += [[timestep, ser_index, 2, min_dist, U_fin-U_in]]
@@ -132,6 +132,7 @@ if __name__=='__main__':
     dt_backup = int(macro_dict['dt_backup'])
     dt_try_change = int(macro_dict['dt_try_change'])
     dt_time = int(macro_dict['dt_time'])
+    dt_active_ser = int(macro_dict['dt_active_ser'])
 
     # ### Input parameters for all the amino acids 
     aa_param_dict = hu.aa_stats_from_file(stat_file)
@@ -156,15 +157,19 @@ if __name__=='__main__':
     
     # ### HOOMD3 routine
     # ## INITIALIZATION
-    device = hoomd.device.CPU(notice_level=2)
-    sim = hoomd.Simulation(device=device, seed=seed)    
-    sim.create_state_from_gsd(filename=file_start)
-    snap = sim.state.get_snapshot()
+    device = hoomd.device.GPU(notice_level=2)
+    sim = hoomd.Simulation(device=device, seed=seed)
+    if start==0:
+        traj = gsd.hoomd.open(file_start)
+        snap = traj[0]
+        snap.configuration.step = 0
+        sim.create_state_from_snapshot(snapshot=snap)
+    elif start==1:
+        sim.create_state_from_gsd(filename=file_start)
+        snap = sim.state.get_snapshot()
+    init_step = sim.initial_timestep
+
     ck1d_mass = snap.particles.mass[0]
-    if start==1:
-        init_step = sim.initial_timestep
-    elif start==0:
-        init_step = 0
     
     type_id = snap.particles.typeid
     ser_serials = np.where(type_id[:155]==15)[0]
@@ -183,9 +188,9 @@ if __name__=='__main__':
     # # groups
     all_group = hoomd.filter.All()
     moving_group = hoomd.filter.Rigid(("center", "free"))
-    #ser_group = hoomd.filter.Tags(list(ser_serials))
-    #active_group = hoomd.filter.Tags(activeCK1d_serials)
-    #active_ser_group = hoomd.filter.Union(active_group, ser_group)
+    ser_group = hoomd.filter.Tags(list(ser_serials))
+    active_group = hoomd.filter.Tags(activeCK1d_serials)
+    active_ser_group = hoomd.filter.Union(active_group, ser_group)
     
     # ## PAIR INTERACTIONS
     cell = hoomd.md.nlist.Cell(buffer=0.4, exclusions=('bond', 'body'))
@@ -251,9 +256,9 @@ if __name__=='__main__':
     #active_ser_dcd = hoomd.write.DCD(trigger=hoomd.trigger.Periodic(dt_active_ser),
     #                                 filename='activeCK1d_SER_exl'+str(ex_number)+'_dump.dcd',
     #                                 filter=active_ser_group)
-    #active_ser_gsd = hoomd.write.GSD(trigger=hoomd.trigger.Periodic(dt_active_ser),
-    #                                 filename='activeCK1d_SER_exl'+str(ex_number)+'_dump.gsd',
-    #                                 filter=active_ser_group)
+    active_ser_gsd = hoomd.write.GSD(trigger=hoomd.trigger.Periodic(dt_active_ser),
+                                     filename=logfile+'_activeCK1d_SER_dump.gsd',
+                                     filter=active_ser_group)
     
     # back-up files
     sim_info_log = hoomd.logging.Logger()
@@ -290,8 +295,8 @@ if __name__=='__main__':
     sim.operations.computes.append(therm_quantities)
     
     sim.operations.writers.append(dump_gsd)
-    #sim.operations.writers.append(active_ser_gsd)
-    #sim.operations.writers.append(active_ser_gsd)
+    sim.operations.writers.append(active_ser_gsd)
+    #sim.operations.writers.append(active_ser_dcd)
     sim.operations.writers.append(backup1_gsd)
     sim.operations.writers.append(backup2_gsd)
     sim.operations.writers.append(tq_gsd)

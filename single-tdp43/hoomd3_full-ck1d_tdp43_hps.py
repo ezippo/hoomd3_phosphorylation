@@ -78,7 +78,7 @@ class ChangeSerine(hoomd.custom.Action):
                     logging.info(f"Dephosphorylation occured: SER id {ser_index}")
                     self._glb_contacts += [[timestep, ser_index, -1, min_dist, U_fin-U_in]]
                 else:
-                    snap.particles.typeid[ser_index] = 15
+                    snap.particles.typeid[ser_index] = 20
                     self._state.set_snapshot(snap)
                     logging.info(f'Dephosphorylation SER id {ser_index} not accepted')
                     self._glb_contacts += [[timestep, ser_index, 2, min_dist, U_fin-U_in]]
@@ -164,24 +164,27 @@ if __name__=='__main__':
     
     # ### HOOMD3 routine
     # ## INITIALIZATION
-    device = hoomd.device.CPU(notice_level=2)
-    sim = hoomd.Simulation(device=device, seed=seed)    
-    sim.create_state_from_gsd(filename=file_start)
-    snap = sim.state.get_snapshot()
+    device = hoomd.device.GPU(notice_level=2)
+    sim = hoomd.Simulation(device=device, seed=seed)
+    if start==0:
+        traj = gsd.hoomd.open(file_start)
+        snap = traj[0]
+        snap.configuration.step = 0
+        sim.create_state_from_snapshot(snapshot=snap)
+    elif start==1:
+        sim.create_state_from_gsd(filename=file_start)
+        snap = sim.state.get_snapshot()
+    init_step = sim.initial_timestep
+
+    ck1d_mass = snap.particles.mass[0]
     
     rbody = np.where(snap.particles.body==0)[0]
     print(rbody)
     #print([aa_type[snap.particles.typeid[i]] for i in rbody])
     #print([aa_type[rigid_id[i]] for i in range(rigid_length)])
-
-    ck1d_mass = snap.particles.mass[0]
-    if start==1:
-        init_step = sim.initial_timestep
-    elif start==0:
-        init_step = 0
     
     type_id = snap.particles.typeid
-    
+
     ser_serials = np.where(type_id[122:276]==15)[0]
     ser_serials = ser_serials+122
     activeCK1d_serials = [424, 425, 426]
@@ -265,7 +268,7 @@ if __name__=='__main__':
                                filename=logfile+'_dump.gsd', filter=all_group,
                                dynamic=['property', 'momentum', 'attribute', 'topology'])                  # you can add [attributes(particles/typeid)] to trace phosphorylation
     #active_ser_dcd = hoomd.write.DCD(trigger=hoomd.trigger.Periodic(dt_active_ser),
-    #                                 filename='_activeCK1d_SER_exl'+str(ex_number)+'_dump.dcd',
+    #                                 filename='activeCK1d_SER_exl'+str(ex_number)+'_dump.dcd',
     #                                 filter=active_ser_group)
     active_ser_gsd = hoomd.write.GSD(trigger=hoomd.trigger.Periodic(dt_active_ser),
                                      filename=logfile+'_activeCK1d_SER_dump.gsd',
