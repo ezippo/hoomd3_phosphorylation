@@ -82,7 +82,7 @@ class ChangeSerine(hoomd.custom.Action):
                     self._glb_contacts += [[timestep, ser_index, -1, min_dist, U_fin-U_in]]
                     self._glb_changes += [[timestep, ser_index, -1]]
                 else:
-                    snap.particles.typeid[ser_index] = 15
+                    snap.particles.typeid[ser_index] = 20
                     self._state.set_snapshot(snap)
                     logging.info(f'Dephosphorylation SER id {ser_index} not accepted')
                     self._glb_contacts += [[timestep, ser_index, 2, min_dist, U_fin-U_in]]
@@ -200,15 +200,19 @@ if __name__=='__main__':
     
     # ### HOOMD3 routine
     # ## INITIALIZATION
-    device = hoomd.device.CPU(notice_level=2)
-    sim = hoomd.Simulation(device=device, seed=seed)    
-    sim.create_state_from_gsd(filename=file_start)
-    snap = sim.state.get_snapshot()
+    device = hoomd.device.GPU(notice_level=2)
+    sim = hoomd.Simulation(device=device, seed=seed)
+    if start==0:
+        traj = gsd.hoomd.open(file_start)
+        snap = traj[0]
+        snap.configuration.step = 0
+        sim.create_state_from_snapshot(snapshot=snap)
+    elif start==1:
+        sim.create_state_from_gsd(filename=file_start)
+        snap = sim.state.get_snapshot()
+    init_step = sim.initial_timestep
+
     ck1d_mass = snap.particles.mass[0]
-    if start==1:
-        init_step = sim.initial_timestep
-    elif start==0:
-        init_step = 0
     
     type_id = snap.particles.typeid
     ser_serials = np.where(type_id[:155]==15)[0]
