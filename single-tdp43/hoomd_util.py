@@ -302,8 +302,8 @@ def compute_distances(active_center, ser_pos):
 def compute_distance_pbc(ck1d_center, ser_pos, box_lenght=50):
     dist = ser_pos-ck1d_center
     for i in range(3):
-        if dist[i] > box_lenght/2:
-            dist[i] = box_lenght - dist[i]
+        if np.abs(dist[i]) > box_lenght/2:
+            dist[i] = box_lenght - np.abs(dist[i])
     dist = np.sqrt( (dist**2).sum() ) 
     return dist
 
