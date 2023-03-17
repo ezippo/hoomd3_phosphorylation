@@ -64,7 +64,7 @@ class ChangeSerine(hoomd.custom.Action):
                 if metropolis_boltzmann(U_fin-U_in, self._Dmu, self._temp):
                     logging.info(f"Phosphorylation occured: SER id {ser_index}")
                     self._glb_contacts += [[timestep, ser_index, 1, min_dist, U_fin-U_in]]
-                    self._glb_changes += [[timestep, ser_index, 1]]
+                    self._glb_changes += [[timestep, ser_index, 1, min_dist, U_fin-U_in]]
                 else:
                     snap.particles.typeid[ser_index] = 15
                     self._state.set_snapshot(snap)
@@ -80,7 +80,7 @@ class ChangeSerine(hoomd.custom.Action):
                 if metropolis_boltzmann(U_fin-U_in, -self._Dmu, self._temp):
                     logging.info(f"Dephosphorylation occured: SER id {ser_index}")
                     self._glb_contacts += [[timestep, ser_index, -1, min_dist, U_fin-U_in]]
-                    self._glb_changes += [[timestep, ser_index, -1]]
+                    self._glb_changes += [[timestep, ser_index, -1, min_dist, U_fin-U_in]]
                 else:
                     snap.particles.typeid[ser_index] = 20
                     self._state.set_snapshot(snap)
@@ -102,17 +102,32 @@ class ReservoirExchange(hoomd.custom.Action):
         positions = snap.particles.position
         ck1d_pos = positions[0]
         dist = hu.compute_distance_pbc(ck1d_pos, positions[self._ser_serial])
-        print(dist)
 
-        if dist>bath_dist and np.random.randint(2):
+        if dist>bath_dist:
             if snap.particles.typeid[self._ser_serial]==15:
+                U_in = self._forces[0].energy + self._forces[1].energy
                 snap.particles.typeid[self._ser_serial] = 20
                 self._state.set_snapshot(snap)
-                self._glb_changes += [[timestep, ser_index, 10]]
-            elif snap.particles.typeid[self._ser_serial]==20:
+                U_fin = self._forces[0].energy + self._forces[1].energy
+                logging.debug(f"U_fin = {U_fin}, U_in = {U_in}")
+                if metropolis_boltzmann(U_fin-U_in, 0, self._temp):
+                    self._glb_changes += [[timestep, ser_index, 10, dist, U_fin-U_in]]
+                else:
+                    snap.particles.typeid[self._ser_serial] = 15
+                    self._state.set_snapshot(snap)
+                    
+            elif snap.particles.typeid[ser_index]==20:
+                U_in = self._forces[0].energy + self._forces[1].energy
                 snap.particles.typeid[self._ser_serial] = 15
                 self._state.set_snapshot(snap)
-                self._glb_changes += [[timestep, ser_index, -10]]
+                U_fin = self._forces[0].energy + self._forces[1].energy
+                logging.debug(f"U_fin = {U_fin}, U_in = {U_in}")
+                if metropolis_boltzmann(U_fin-U_in, 0, self._temp):
+                    self._glb_changes += [[timestep, ser_index, -10, dist, U_fin-U_in]]
+                else:
+                    snap.particles.typeid[self._ser_serial] = 20
+                    self._state.set_snapshot(snap)
+
             else:
                 raise Exception(f"Residue {self._ser_serial} is not a serine!")
 
@@ -133,7 +148,7 @@ class ChangesBackUp(hoomd.custom.Action):
         self._glb_changes = glb_changes
 
     def act(self, timestep):
-        np.savetxt(logfile+"_changesBCKP.txt", self._glb_changes, fmt='%f', header="# timestep    SER index    acc    \n# acc= {1->phosphorylation, 10->change SER with SEP, -1->dephospho accepted, -10->change SEP with SER} ")
+        np.savetxt(logfile+"_changesBCKP.txt", self._glb_changes, fmt='%f', header="# timestep    SER index    acc    distance     dU  \n# acc= {1->phosphorylation, 10->change SER with SEP, -1->dephospho accepted, -10->change SEP with SER} ")
 
 
 
@@ -369,7 +384,7 @@ if __name__=='__main__':
         if start==1:
             cont_prev = np.loadtxt(logfile+"_changes.txt")
             type_changes = np.append(cont_prev, type_changes, axis=0)
-        np.savetxt(logfile+"_changes.txt", type_changes, fmt='%f', header="# timestep    SER index    acc    \n# acc= {1->phosphorylation, 10->change SER with SEP, -1->dephospho accepted, -10->change SEP with SER} ")
+        np.savetxt(logfile+"_changes.txt", type_changes, fmt='%f', header="# timestep    SER index    acc    distance     dU  \n# acc= {1->phosphorylation, 10->change SER with SEP, -1->dephospho accepted, -10->change SEP with SER} ")
     
     hoomd.write.GSD.write(state=sim.state, filename=logfile+'_end.gsd')
     
