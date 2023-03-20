@@ -11,10 +11,8 @@ seed    SEED
 # Files
 stat_file   input_stats/stats_module.dat
 filein_ck1d input_stats/CA_ck1delta.pdb
-#file_start  input_stats/ck1d-rigid_multi-tau_start.gsd
-file_start  sim_INDEX/thermINDEX_ck1d-rigid_multi-tau_end.gsd
-#file_start  ck1d-rigid_tau_start.gsd
-logfile	    sim_INDEX/simINDEX_ck1d-rigid_multi-tau
+file_start  input_stats/ck1d-rigid_tau_start.gsd
+logfile	    sim_INDEX/simINDEX_ck1d-rigid_tau
 
 # Logging time interval
 dt_dump DTDUMP

@@ -12,13 +12,13 @@ import hoomd_util as hu
 #        mass -> amu
 #        energy -> kJ/mol
 # ### MACROs
-box_length=200
-spacing = 25
-n_tdp43s = 200
+box_length=160
+spacing = 32
+n_tdp43s = 70
 
 stat_file = 'input_stats/stats_module.dat'
 filein_ck1d = 'input_stats/CA_ck1delta.pdb'
-filein_tdp43 = 'input_stats/CA_TDP-43_261truncated.pdb'
+filein_tdp43 = 'input_stats/CA_tau.pdb'
 
 # ------------------------- MAIN -------------------------------
 
@@ -57,7 +57,7 @@ if __name__=='__main__':
     print(tdp43_length)
 
     # positions
-    xx = [-box_length/2 +20 +25*i for i in range(7)]
+    xx = [-box_length/2 +int(spacing/2) +spacing*i for i in range(5)]
     cpos = list(itertools.product(xx, repeat=3))
     cpos = cpos[:n_tdp43s+1]
     positions = []
@@ -101,14 +101,31 @@ if __name__=='__main__':
     s.configuration.box = [box_length,box_length,box_length,0,0,0] 
     s.configuration.step = 0
     
-    with gsd.hoomd.open(name='input_stats/ck1d-center_multi-tdp43_start.gsd', mode='wb') as fout:
+    with gsd.hoomd.open(name='input_stats/ck1d-center_multi-tau_start.gsd', mode='wb') as fout:
         fout.append(s)
         
+
+    # Defining rigid body
+    import hoomd, hoomd.md     # version 2
+    hoomd.context.initialize()
+    system = hoomd.init.read_gsd('input_stats/ck1d-center_multi-tau_start.gsd')
+    all_p = hoomd.group.all()
+    
+    rigid = hoomd.md.constrain.rigid()
+    rigid.set_param('R', types=[aa_type[ck1d_id[i]] for i in range(ck1d_length)],
+                    positions=ck1d_rel_pos)
+  #  print(rigid.create_bodies(False))
+    rigid.create_bodies()
+     
+    hoomd.dump.gsd('input_stats/ck1d-rigid_multi-tau_start.gsd', period=1, group=all_p, truncate=True)
+    hoomd.run_upto(1, limit_hours=24)
+
     '''
     # create rigid body    
+    import hoomd
     
     sim = hoomd.Simulation(device=hoomd.device.CPU())
-    sim.create_state_from_gsd(filename='input_stats/ck1d-center_multi-tdp43_start.gsd')
+    sim.create_state_from_gsd(filename='input_stats/ck1d-center_multi-tau_start.gsd')
     
     rigid = hoomd.md.constrain.Rigid()
     rigid.body["R"] = {
@@ -126,6 +143,6 @@ if __name__=='__main__':
     sim.operations.integrator = integrator
     
     sim.run(0)
-    hoomd.write.GSD.write(state=sim.state, filename='input_stats/ck1d-rigid_multi-tdp43_start.gsd')
+    hoomd.write.GSD.write(state=sim.state, filename='input_stats/ck1d-rigid_multi-tau_start.gsd')
     '''
     
