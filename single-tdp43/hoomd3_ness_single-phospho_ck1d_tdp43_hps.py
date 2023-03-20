@@ -115,19 +115,19 @@ class ReservoirExchange(hoomd.custom.Action):
                 U_fin = self._forces[0].energy + self._forces[1].energy
                 logging.debug(f"U_fin = {U_fin}, U_in = {U_in}")
                 if metropolis_boltzmann(U_fin-U_in, 0, self._temp):
-                    self._glb_changes += [[timestep, ser_index, 10, dist, U_fin-U_in]]
+                    self._glb_changes += [[timestep, self._ser_serial, 10, dist, U_fin-U_in]]
                 else:
                     snap.particles.typeid[self._ser_serial] = 15
                     self._state.set_snapshot(snap)
                     
-            elif snap.particles.typeid[ser_index]==20:
+            elif snap.particles.typeid[self._ser_serial]==20:
                 U_in = self._forces[0].energy + self._forces[1].energy
                 snap.particles.typeid[self._ser_serial] = 15
                 self._state.set_snapshot(snap)
                 U_fin = self._forces[0].energy + self._forces[1].energy
                 logging.debug(f"U_fin = {U_fin}, U_in = {U_in}")
                 if metropolis_boltzmann(U_fin-U_in, 0, self._temp):
-                    self._glb_changes += [[timestep, ser_index, -10, dist, U_fin-U_in]]
+                    self._glb_changes += [[timestep, self._ser_serial, -10, dist, U_fin-U_in]]
                 else:
                     snap.particles.typeid[self._ser_serial] = 20
                     self._state.set_snapshot(snap)
