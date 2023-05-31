@@ -378,17 +378,17 @@ if __name__=='__main__':
 
     sim.run(production_steps-init_step)
     
-    if len(contacts)!=0:
-        if start==1:
-            cont_prev = np.loadtxt(logfile+"_contacts.txt")
-            contacts = np.append(cont_prev, contacts, axis=0)
-        np.savetxt(logfile+"_contacts.txt", contacts, fmt='%f', header="# timestep    SER index    acc    distance     dU  \n# acc= {0->phospho rejected, 1->phospho accepted, 2->dephospho rejected, -1->dephospho accepted} ")
+    if start==1:
+        cont_prev = np.loadtxt(logfile+"_contacts.txt")
+        if len(cont_prev)!=0:
+                contacts = np.append(cont_prev, contacts, axis=0)
+    np.savetxt(logfile+"_contacts.txt", contacts, fmt='%f', header="# timestep    SER index    acc    distance     dU  \n# acc= {0->phospho rejected, 1->phospho accepted, 2->dephospho rejected, -1->dephospho accepted} ")
     
-    if len(type_changes)!=0:
-        if start==1:
-            cont_prev = np.loadtxt(logfile+"_changes.txt")
-            type_changes = np.append(cont_prev, type_changes, axis=0)
-        np.savetxt(logfile+"_changes.txt", type_changes, fmt='%f', header="# timestep    SER index    acc    distance     dU  \n# acc= {1->phosphorylation, 10->change SER with SEP, -1->dephospho accepted, -10->change SEP with SER} ")
+    if start==1:
+        cont_prev = np.loadtxt(logfile+"_changes.txt")
+        if len(cont_prev)!=0:
+                type_changes = np.append(cont_prev, type_changes, axis=0)
+    np.savetxt(logfile+"_changes.txt", type_changes, fmt='%f', header="# timestep    SER index    acc    distance     dU  \n# acc= {1->phosphorylation, 10->change SER with SEP, -1->dephospho accepted, -10->change SEP with SER} ")
     
     hoomd.write.GSD.write(state=sim.state, filename=logfile+'_end.gsd')
     
