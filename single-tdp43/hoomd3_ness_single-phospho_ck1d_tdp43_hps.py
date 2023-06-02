@@ -36,24 +36,26 @@ class PrintTimestep(hoomd.custom.Action):
 
 class ChangeSerine(hoomd.custom.Action):
 
-    def __init__(self, active_serials, ser_serials, forces, glb_contacts, glb_changes, temp, Dmu):
+    def __init__(self, active_serials, ser_serials, forces, glb_contacts, temp, Dmu, box_size, contact_dist):
         self._active_serials = active_serials
         self._ser_serials = ser_serials
         self._forces = forces
         self._glb_contacts = glb_contacts
-        self._glb_changes = glb_changes
         self._temp = temp
         self._Dmu = Dmu
+        self._box_size = box_size
+        self._contact_dist = contact_dist
 
     def act(self, timestep):
         snap = self._state.get_snapshot()
         positions = snap.particles.position
-        active_pos = hu.compute_center(positions[self._active_serials])
-        dist = hu.compute_distances(active_pos, positions[self._ser_serials])
-        min_dist = np.min(dist)
+        active_pos = positions[self._active_serials]
+        distances = hu.compute_distances_pbc(active_pos, positions[self._ser_serials], self._box_size)
+        distances = np.max(distances, axis=0)
+        min_dist = np.min(distances)
 
-        if min_dist<contact_dist:
-            ser_index = self._ser_serials[np.argmin(dist)]
+        if min_dist<self._contact_dist:
+            ser_index = self._ser_serials[np.argmin(distances)]
 
             if snap.particles.typeid[ser_index]==15:
                 U_in = self._forces[0].energy + self._forces[1].energy
@@ -93,21 +95,27 @@ class ChangeSerine(hoomd.custom.Action):
 
 class ReservoirExchange(hoomd.custom.Action):
 
-    def __init__(self, active_serials, ser_serial, forces, glb_changes, temp, Dmu):
+    def __init__(self, active_serials, ser_serial, forces, glb_changes, temp, Dmu, box_size, bath_dist):
         self._active_serials = active_serials
         self._ser_serial = ser_serial
         self._forces = forces
         self._temp = temp
         self._Dmu = Dmu
         self._glb_changes = glb_changes
+        self._box_size = box_size
+        self._bath_dist = bath_dist
 
     def act(self, timestep):
         snap = self._state.get_snapshot()
         positions = snap.particles.position
-        active_pos = hu.compute_center(positions[self._active_serials])
+        active_pos = positions[self._active_serials]
+        
         dist = hu.compute_distance_pbc(active_pos, positions[self._ser_serial])
+        distances = hu.compute_distances_pbc(active_pos, positions[self._ser_serials], self._box_size)
+        distances = np.min(distances, axis=0)
+        max_dist = np.max(distances)
 
-        if dist>bath_dist:
+        if max_dist>self._bath_dist:
             if snap.particles.typeid[self._ser_serial]==15:
                 U_in = self._forces[0].energy + self._forces[1].energy
                 snap.particles.typeid[self._ser_serial] = 20
@@ -235,6 +243,8 @@ if __name__=='__main__':
     
     type_id = snap.particles.typeid
     ser_serials = np.where(type_id[:155]==15)[0]
+    sep_serials = np.where(type_id[:155]==20)[0]
+    ser_serials = np.append(ser_serials, sep_serials)
     single_ser = [ser_serials[ser_index]]
     activeCK1d_serials = [301, 302, 303]     # [171, 204, 301, 302, 303, 304, 305]
  
@@ -348,10 +358,11 @@ if __name__=='__main__':
     time_writer = hoomd.write.CustomWriter(action=time_action, trigger=hoomd.trigger.Periodic(dt_time))
     
     changeser_action = ChangeSerine(active_serials=activeCK1d_serials, ser_serials=single_ser, forces=[yukawa, ashbaugh_table], 
-                                    glb_contacts=contacts, glb_changes=type_changes, temp=temp, Dmu=Dmu)
+                                    glb_contacts=contacts, glb_changes=type_changes, temp=temp, Dmu=Dmu, box_size=box_size, contact_dist=contact_dist)
     changeser_updater = hoomd.update.CustomUpdater(action=changeser_action, trigger=hoomd.trigger.Periodic(dt_try_change))
 
-    bath_action = ReservoirExchange(active_serials=activeCK1d_serials, ser_serial=single_ser[0], forces=[yukawa, ashbaugh_table], glb_changes=type_changes, temp=temp, Dmu=Dmu)
+    bath_action = ReservoirExchange(active_serials=activeCK1d_serials, ser_serial=single_ser[0], forces=[yukawa, ashbaugh_table], 
+                                    glb_changes=type_changes, temp=temp, Dmu=Dmu, box_size=box_size, contact_dist=contact_dist)
     bath_updater = hoomd.update.CustomUpdater(action=bath_action, trigger=hoomd.trigger.Periodic(dt_bath))
 
     contacts_action = ContactsBackUp(glb_contacts=contacts)

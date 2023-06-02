@@ -293,11 +293,68 @@ def Flist_ashbaugh(sigma, lambda_hps, r_max, r_min=0.4, n_bins=100, epsilon=0.83
     return Flist
 
 
-def compute_distances(active_center, ser_pos):
-    n_ser = len(ser_pos)
-    distances = ser_pos-active_center
-    distances = np.array([ np.sqrt( (distances[i]**2).sum() ) for i in range(n_ser)  ])
-    return distances
+def compute_distances_pbc(p1, p2, box_size):
+    """
+    Compute the distances between two arrays of particles in a cubic box
+    with periodic boundary conditions.
+
+    Args:
+        p1 (numpy array): Positions of particles in group 1.
+                          Shape: (N1, 3), where N1 is the number of particles.
+        p2 (numpy array): Positions of particles in group 2.
+                          Shape: (N2, 3), where N2 is the number of particles.
+        box_size (float): Size of the cubic box.
+
+    Returns:
+        numpy array: Distances between the particles.
+                     Shape: (N1, N2), where N1 and N2 are the number of particles in the two groups.
+    """
+    # Compute the minimum image distance in each coordinate
+    dx = np.abs(p1[:, 0, None] - p2[:, 0])
+    dy = np.abs(p1[:, 1, None] - p2[:, 1])
+    dz = np.abs(p1[:, 2, None] - p2[:, 2])
+
+    # Apply periodic boundary conditions
+    dx = np.minimum(dx, box_size - dx)
+    dy = np.minimum(dy, box_size - dy)
+    dz = np.minimum(dz, box_size - dz)
+
+    # Compute the Euclidean distance
+    dist = np.sqrt(dx**2 + dy**2 + dz**2)
+
+    return dist
+
+
+def compute_single_distance_pbc(p1, p2, box_size):
+    """
+    Compute the distances between two arrays of particles in a cubic box
+    with periodic boundary conditions.
+
+    Args:
+        p1 (numpy array): Positions of particle 1.
+                          Shape: (3)
+        p2 (numpy array): Positions of particle 2.
+                          Shape: (3)
+        box_size (float): Size of the cubic box.
+
+    Returns:
+        float: Distance between the particles.
+    """
+    # Compute the minimum image distance in each coordinate
+    dx = np.abs(p1[0] - p2[0])
+    dy = np.abs(p1[1] - p2[1])
+    dz = np.abs(p1[2] - p2[2])
+
+    # Apply periodic boundary conditions
+    dx = np.minimum(dx, box_size - dx)
+    dy = np.minimum(dy, box_size - dy)
+    dz = np.minimum(dz, box_size - dz)
+
+    # Compute the Euclidean distance
+    dist = np.sqrt(dx**2 + dy**2 + dz**2)
+
+    return dist
+
 
 def compute_center(pos):
     n = len(pos)
