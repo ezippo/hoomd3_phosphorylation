@@ -188,9 +188,7 @@ if __name__=='__main__':
     
     type_id = snap.particles.typeid
 
-    ser_serials = np.where(type_id[122:276]==15)[0]
-    sep_serials = np.where(type_id[122:276]==20)[0]
-    ser_serials = np.append(ser_serials, sep_serials)
+    ser_serials = np.where(np.isin(type_id[122:276],[15,20]))[0]
     ser_serials = ser_serials+122
     activeCK1d_serials = [424, 425, 426]
     
@@ -307,7 +305,7 @@ if __name__=='__main__':
     time_writer = hoomd.write.CustomWriter(action=time_action, trigger=hoomd.trigger.Periodic(dt_time))
     
     changeser_action = ChangeSerine(active_serials=activeCK1d_serials, ser_serials=ser_serials, forces=[yukawa, ashbaugh_table], 
-                                    glb_contacts=contacts, temp=temp, Dmu=Dmu, box_size=box_size, contact_dist=contact_dist)
+                                    glb_contacts=contacts, temp=temp, Dmu=Dmu, box_size=box_lenght, contact_dist=contact_dist)
     changeser_updater = hoomd.update.CustomUpdater(action=changeser_action, trigger=hoomd.trigger.Periodic(dt_try_change))
 
     contacts_action = ContactsBackUp(glb_contacts=contacts)
@@ -329,11 +327,15 @@ if __name__=='__main__':
 
     sim.run(production_steps-init_step)
     
-    if start==1:
+    if start==1 and len(contacts)!=0:
         cont_prev = np.loadtxt(logfile+"_contacts.txt")
         if len(cont_prev)!=0:
-                contacts = np.append(cont_prev, contacts, axis=0)
-    np.savetxt(logfile+"_contacts.txt", contacts, fmt='%f', header="# timestep    SER index    acc    distance     dU  \n# acc= {0->phospho rejected, 1->phospho accepted, 2->dephospho rejected, -1->dephospho accepted} ")
+            if cont_prev.ndim==1:
+                cont_prev = [cont_prev]
+            contacts = np.append(cont_prev, contacts, axis=0)
+        np.savetxt(logfile+"_contacts.txt", contacts, fmt='%f', header="# timestep    SER index    acc    distance     dU  \n# acc= {0->phospho rejected, 1->phospho accepted, 2->dephospho rejected, -1->dephospho accepted} ")
+    elif start==0:
+        np.savetxt(logfile+"_contacts.txt", contacts, fmt='%f', header="# timestep    SER index    acc    distance     dU  \n# acc= {0->phospho rejected, 1->phospho accepted, 2->dephospho rejected, -1->dephospho accepted} ")
     
     hoomd.write.GSD.write(state=sim.state, filename=logfile+'_end.gsd')
     

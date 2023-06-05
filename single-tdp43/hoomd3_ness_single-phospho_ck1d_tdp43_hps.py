@@ -36,11 +36,12 @@ class PrintTimestep(hoomd.custom.Action):
 
 class ChangeSerine(hoomd.custom.Action):
 
-    def __init__(self, active_serials, ser_serials, forces, glb_contacts, temp, Dmu, box_size, contact_dist):
+    def __init__(self, active_serials, ser_serials, forces, glb_contacts, glb_changes, temp, Dmu, box_size, contact_dist):
         self._active_serials = active_serials
         self._ser_serials = ser_serials
         self._forces = forces
         self._glb_contacts = glb_contacts
+        self._glb_changes = glb_changes
         self._temp = temp
         self._Dmu = Dmu
         self._box_size = box_size
@@ -95,9 +96,9 @@ class ChangeSerine(hoomd.custom.Action):
 
 class ReservoirExchange(hoomd.custom.Action):
 
-    def __init__(self, active_serials, ser_serial, forces, glb_changes, temp, Dmu, box_size, bath_dist):
+    def __init__(self, active_serials, ser_serials, forces, glb_changes, temp, Dmu, box_size, bath_dist):
         self._active_serials = active_serials
-        self._ser_serial = ser_serial
+        self._ser_serials = ser_serials
         self._forces = forces
         self._temp = temp
         self._Dmu = Dmu
@@ -109,35 +110,33 @@ class ReservoirExchange(hoomd.custom.Action):
         snap = self._state.get_snapshot()
         positions = snap.particles.position
         active_pos = positions[self._active_serials]
-        
-        dist = hu.compute_distance_pbc(active_pos, positions[self._ser_serial])
         distances = hu.compute_distances_pbc(active_pos, positions[self._ser_serials], self._box_size)
         distances = np.min(distances, axis=0)
         max_dist = np.max(distances)
 
         if max_dist>self._bath_dist:
-            if snap.particles.typeid[self._ser_serial]==15:
+            if snap.particles.typeid[self._ser_serials]==15:
                 U_in = self._forces[0].energy + self._forces[1].energy
-                snap.particles.typeid[self._ser_serial] = 20
+                snap.particles.typeid[self._ser_serials] = 20
                 self._state.set_snapshot(snap)
                 U_fin = self._forces[0].energy + self._forces[1].energy
                 logging.debug(f"U_fin = {U_fin}, U_in = {U_in}")
                 if metropolis_boltzmann(U_fin-U_in, 0, self._temp):
-                    self._glb_changes += [[timestep, self._ser_serial, 10, dist, U_fin-U_in]]
+                    self._glb_changes += [[timestep, self._ser_serials, 10, dist, U_fin-U_in]]
                 else:
-                    snap.particles.typeid[self._ser_serial] = 15
+                    snap.particles.typeid[self._ser_serials] = 15
                     self._state.set_snapshot(snap)
                     
-            elif snap.particles.typeid[self._ser_serial]==20:
+            elif snap.particles.typeid[self._ser_serials]==20:
                 U_in = self._forces[0].energy + self._forces[1].energy
-                snap.particles.typeid[self._ser_serial] = 15
+                snap.particles.typeid[self._ser_serials] = 15
                 self._state.set_snapshot(snap)
                 U_fin = self._forces[0].energy + self._forces[1].energy
                 logging.debug(f"U_fin = {U_fin}, U_in = {U_in}")
                 if metropolis_boltzmann(U_fin-U_in, 0, self._temp):
-                    self._glb_changes += [[timestep, self._ser_serial, -10, dist, U_fin-U_in]]
+                    self._glb_changes += [[timestep, self._ser_serials, -10, dist, U_fin-U_in]]
                 else:
-                    snap.particles.typeid[self._ser_serial] = 20
+                    snap.particles.typeid[self._ser_serials] = 20
                     self._state.set_snapshot(snap)
 
             else:
@@ -227,7 +226,7 @@ if __name__=='__main__':
     
     # ### HOOMD3 routine
     # ## INITIALIZATION
-    device = hoomd.device.GPU(notice_level=2)
+    device = hoomd.device.CPU(notice_level=2)
     sim = hoomd.Simulation(device=device, seed=seed)
     if start==0:
         traj = gsd.hoomd.open(file_start)
@@ -242,9 +241,7 @@ if __name__=='__main__':
     ck1d_mass = snap.particles.mass[0]
     
     type_id = snap.particles.typeid
-    ser_serials = np.where(type_id[:155]==15)[0]
-    sep_serials = np.where(type_id[:155]==20)[0]
-    ser_serials = np.append(ser_serials, sep_serials)
+    ser_serials = np.where(np.isin(type_id[:155],[15,20]))[0]
     single_ser = [ser_serials[ser_index]]
     activeCK1d_serials = [301, 302, 303]     # [171, 204, 301, 302, 303, 304, 305]
  
@@ -358,11 +355,11 @@ if __name__=='__main__':
     time_writer = hoomd.write.CustomWriter(action=time_action, trigger=hoomd.trigger.Periodic(dt_time))
     
     changeser_action = ChangeSerine(active_serials=activeCK1d_serials, ser_serials=single_ser, forces=[yukawa, ashbaugh_table], 
-                                    glb_contacts=contacts, glb_changes=type_changes, temp=temp, Dmu=Dmu, box_size=box_size, contact_dist=contact_dist)
+                                    glb_contacts=contacts, glb_changes=type_changes, temp=temp, Dmu=Dmu, box_size=box_lenght, contact_dist=contact_dist)
     changeser_updater = hoomd.update.CustomUpdater(action=changeser_action, trigger=hoomd.trigger.Periodic(dt_try_change))
 
-    bath_action = ReservoirExchange(active_serials=activeCK1d_serials, ser_serial=single_ser[0], forces=[yukawa, ashbaugh_table], 
-                                    glb_changes=type_changes, temp=temp, Dmu=Dmu, box_size=box_size, contact_dist=contact_dist)
+    bath_action = ReservoirExchange(active_serials=activeCK1d_serials, ser_serials=single_ser, forces=[yukawa, ashbaugh_table], 
+                                    glb_changes=type_changes, temp=temp, Dmu=Dmu, box_size=box_lenght, bath_dist=bath_dist)
     bath_updater = hoomd.update.CustomUpdater(action=bath_action, trigger=hoomd.trigger.Periodic(dt_bath))
 
     contacts_action = ContactsBackUp(glb_contacts=contacts)
@@ -389,17 +386,25 @@ if __name__=='__main__':
 
     sim.run(production_steps-init_step)
     
-    if start==1:
+    if start==1 and len(contacts)!=0:
         cont_prev = np.loadtxt(logfile+"_contacts.txt")
         if len(cont_prev)!=0:
-                contacts = np.append(cont_prev, contacts, axis=0)
-    np.savetxt(logfile+"_contacts.txt", contacts, fmt='%f', header="# timestep    SER index    acc    distance     dU  \n# acc= {0->phospho rejected, 1->phospho accepted, 2->dephospho rejected, -1->dephospho accepted} ")
+            if cont_prev.ndim==1:
+                cont_prev = [cont_prev]
+            contacts = np.append(cont_prev, contacts, axis=0)
+        np.savetxt(logfile+"_contacts.txt", contacts, fmt='%f', header="# timestep    SER index    acc    distance     dU  \n# acc= {0->phospho rejected, 1->phospho accepted, 2->dephospho rejected, -1->dephospho accepted} ")
+    elif start==0:
+        np.savetxt(logfile+"_contacts.txt", contacts, fmt='%f', header="# timestep    SER index    acc    distance     dU  \n# acc= {0->phospho rejected, 1->phospho accepted, 2->dephospho rejected, -1->dephospho accepted} ")
     
-    if start==1:
+    if start==1 and len(type_changes)!=0:
         cont_prev = np.loadtxt(logfile+"_changes.txt")
         if len(cont_prev)!=0:
-                type_changes = np.append(cont_prev, type_changes, axis=0)
-    np.savetxt(logfile+"_changes.txt", type_changes, fmt='%f', header="# timestep    SER index    acc    distance     dU  \n# acc= {1->phosphorylation, 10->change SER with SEP, -1->dephospho accepted, -10->change SEP with SER} ")
+            if cont_prev.ndim==1:
+                cont_prev = [cont_prev]
+            type_changes = np.append(cont_prev, type_changes, axis=0)
+        np.savetxt(logfile+"_changes.txt", type_changes, fmt='%f', header="# timestep    SER index    acc    distance     dU  \n# acc= {1->phosphorylation, 10->change SER with SEP, -1->dephospho accepted, -10->change SEP with SER} ")
+    elif start==0:
+        np.savetxt(logfile+"_changes.txt", type_changes, fmt='%f', header="# timestep    SER index    acc    distance     dU  \n# acc= {1->phosphorylation, 10->change SER with SEP, -1->dephospho accepted, -10->change SEP with SER} ")
     
     hoomd.write.GSD.write(state=sim.state, filename=logfile+'_end.gsd')
     
