@@ -51,10 +51,12 @@ class ChangeSerine(hoomd.custom.Action):
         active_pos = positions[self._active_serials]
         distances = hu.compute_distances_pbc(active_pos, positions[self._ser_serials], self._box_size)
         distances = np.max(distances, axis=0)
+        logging.debug(f"ChangeSerine: distances {distances}")
         min_dist = np.min(distances)
 
         if min_dist<self._contact_dist:
             ser_index = self._ser_serials[np.argmin(distances)]
+            logging.debug(f"ChangeSerine: ser_index {ser_index}")
 
             if snap.particles.typeid[ser_index]==15:
                 U_in = self._forces[0].energy + self._forces[1].energy
@@ -88,6 +90,8 @@ class ChangeSerine(hoomd.custom.Action):
 
             else:
                 raise Exception(f"Residue {ser_index} is not a serine!")
+        
+        logging.debug(f"ChangeSerine: type SER/SEP {snap.particles.typeid[ser_index]}")
 
 
 class ContactsBackUp(hoomd.custom.Action):
@@ -105,7 +109,7 @@ class ContactsBackUp(hoomd.custom.Action):
 if __name__=='__main__':
     # TIME START
     time_start = time.time()
-    logging.basicConfig(level=logging.WARNING)
+    logging.basicConfig(level=logging.DEBUG)
 
     # UNITS: distance -> nm   (!!!positions and sigma in files are in agstrom!!!)
     #        mass -> amu
@@ -167,7 +171,7 @@ if __name__=='__main__':
     
     # ### HOOMD3 routine
     # ## INITIALIZATION
-    device = hoomd.device.GPU(notice_level=2)
+    device = hoomd.device.CPU(notice_level=2)
     sim = hoomd.Simulation(device=device, seed=seed)
     if start==0:
         traj = gsd.hoomd.open(file_start)
@@ -182,7 +186,6 @@ if __name__=='__main__':
     ck1d_mass = snap.particles.mass[0]
     
     rbody = np.where(snap.particles.body==0)[0]
-    print(rbody)
     #print([aa_type[snap.particles.typeid[i]] for i in rbody])
     #print([aa_type[rigid_id[i]] for i in range(rigid_length)])
     
@@ -191,7 +194,7 @@ if __name__=='__main__':
     ser_serials = np.where(np.isin(type_id[122:276],[15,20]))[0]
     ser_serials = ser_serials+122
     activeCK1d_serials = [424, 425, 426]
-    
+    print(ser_serials)
     # # rigid body    
     rigid = hoomd.md.constrain.Rigid()
     rigid.body["R"] = {
