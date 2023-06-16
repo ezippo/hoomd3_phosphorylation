@@ -1,3 +1,6 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
 import sys,os
 import time
 import numpy as np
@@ -6,6 +9,100 @@ import gsd, gsd.hoomd
 import logging
 
 import hoomd_util as hu
+
+
+contacts = []
+
+def metropolis_boltzmann(dU, dmu, beta=2.494338):
+    x = np.random.rand()
+    if np.log(x) <= -beta*(dU+dmu):
+        return True
+    else:
+        return False
+
+
+# ### CUSTOM ACTIONS
+class PrintTimestep(hoomd.custom.Action):
+
+    def __init__(self, t_start):
+        self._t_start = t_start
+
+    def act(self, timestep):
+        current_time = time.time()
+        current_time = current_time - self._t_start
+        print(f"Elapsed time {current_time} | Step {timestep}/{production_steps} " )
+
+
+class ChangeSerine(hoomd.custom.Action):
+
+    def __init__(self, active_serials, ser_serials, forces, glb_contacts, temp, Dmu, box_size, contact_dist):
+        self._active_serials = active_serials
+        self._ser_serials = ser_serials
+        self._forces = forces
+        self._glb_contacts = glb_contacts
+        self._temp = temp
+        self._Dmu = Dmu
+        self._box_size = box_size
+        self._contact_dist = contact_dist
+
+    def act(self, timestep):
+        snap = self._state.get_snapshot()
+        positions = snap.particles.position
+        active_pos = positions[self._active_serials]
+        distances = hu.compute_distances_pbc(active_pos, positions[self._ser_serials], self._box_size)
+        distances = np.max(distances, axis=0)
+        logging.debug(f"ChangeSerine: distances {distances}")
+        min_dist = np.min(distances)
+
+        if min_dist<self._contact_dist:
+            ser_index = self._ser_serials[np.argmin(distances)]
+            logging.debug(f"ChangeSerine: ser_index {ser_index}")
+
+            if snap.particles.typeid[ser_index]==15:
+                U_in = self._forces[0].energy + self._forces[1].energy
+                snap.particles.typeid[ser_index] = 20
+                self._state.set_snapshot(snap)
+                U_fin = self._forces[0].energy + self._forces[1].energy
+                logging.debug(f"U_fin = {U_fin}, U_in = {U_in}")
+                if metropolis_boltzmann(U_fin-U_in, self._Dmu, self._temp):
+                    logging.info(f"Phosphorylation occured: SER id {ser_index}")
+                    self._glb_contacts += [[timestep, ser_index, 1, min_dist, U_fin-U_in]]
+                else:
+                    snap.particles.typeid[ser_index] = 15
+                    self._state.set_snapshot(snap)
+                    logging.info(f'Phosphorylation SER id {ser_index} not accepted')
+                    self._glb_contacts += [[timestep, ser_index, 0, min_dist, U_fin-U_in]]
+                    
+            elif snap.particles.typeid[ser_index]==20:
+                U_in = self._forces[0].energy + self._forces[1].energy
+                snap.particles.typeid[ser_index] = 15
+                self._state.set_snapshot(snap)
+                U_fin = self._forces[0].energy + self._forces[1].energy
+                logging.debug(f"U_fin = {U_fin}, U_in = {U_in}")
+                if metropolis_boltzmann(U_fin-U_in, -self._Dmu, self._temp):
+                    logging.info(f"Dephosphorylation occured: SER id {ser_index}")
+                    self._glb_contacts += [[timestep, ser_index, -1, min_dist, U_fin-U_in]]
+                else:
+                    snap.particles.typeid[ser_index] = 20
+                    self._state.set_snapshot(snap)
+                    logging.info(f'Dephosphorylation SER id {ser_index} not accepted')
+                    self._glb_contacts += [[timestep, ser_index, 2, min_dist, U_fin-U_in]]
+
+            else:
+                raise Exception(f"Residue {ser_index} is not a serine!")
+
+        logging.debug(f"ChangeSerine: type SER/SEP {snap.particles.typeid[ser_index]}")
+
+
+class ContactsBackUp(hoomd.custom.Action):
+
+    def __init__(self, glb_contacts):
+        self._glb_contacts = glb_contacts
+
+    def act(self, timestep):
+        np.savetxt(logfile+"_contactsBCKP.txt", self._glb_contacts, fmt='%f', header="# timestep    SER index    acc    distance     dU  \n# acc= {0->phospho rejected, 1->phospho accepted, 2->dephospho rejected, -1->dephospho accepted} ")
+
+                
 
 # --------------------------- MAIN ------------------------------
 
@@ -108,48 +205,144 @@ if __name__=='__main__':
     # # bonds
     harmonic = hoomd.md.bond.Harmonic()
     harmonic.params['AA_bond'] = dict(k=8360, r0=0.381)
-
-    def ashbaugh_interactions(types, aa_param_combined, aa2_type_rigid_1, one_rna_type, nl):
-
-        ashbaugh_table = hoomd.md.pair.Table(nlist=nl)
-        for i in range(len(aa_type)):
-            atom1 = aa_type[i]
-            for j in range(i,len(aa_type)):
-                atom2 = aa_type[j]
-                if ai in aa2_type_rigid or aj in aa2_type_rigid:
-                Ulist = hu.Ulist_ashbaugh(sigma=[aa_sigma[i], aa_sigma[j]], 
-                                        lambda_hps=[aa_lambda[i], aa_lambda[j]],
-                                        r_max=2.0, r_min=0.2, n_bins=100000, epsilon=0.8368)
-                Flist = hu.Flist_ashbaugh(sigma=[aa_sigma[i], aa_sigma[j]], 
-                                        lambda_hps=[aa_lambda[i], aa_lambda[j]],
-                                        r_max=2.0, r_min=0.2, n_bins=100000, epsilon=0.8368)
-                ashbaugh_table.params[(atom1, atom2)] = dict(r_min=0.2, U=Ulist, F=Flist)
-                ashbaugh_table.r_cut[(atom1, atom2)] = 2.0            
-            ashbaugh_table.params[(atom1, 'R')] = dict(r_min=0., U=[0], F=[0])
-            ashbaugh_table.r_cut[(atom1, 'R')] = 0 
-        ashbaugh_table.params[('R', 'R')] = dict(r_min=0., U=[0], F=[0])
-        ashbaugh_table.r_cut[('R', 'R')] = 0 
-
-        nb = hoomd.md.pair.Table(nlist=cell)
-        for i, ai in enumerate(types):
-            for j, aj in enumerate(types):
-                if ai in aa2_type_rigid_1 or ai in aa2_type_rigid_2 or aj in aa2_type_rigid_1 or aj in aa2_type_rigid_2:
-                    lam_val = lam_val * 0.7 # reduce lambda value by 30%
-                nb.pair_coeff.set(ai, aj, lam=lam_val, epsilon=0.8368,
-                                sigma=(aa_param_combined[ai][2] + aa_param_combined[aj][2])/10.0/2.0, r_cut=2.0)
-            nb.pair_coeff.set(ai, 'R', lam=0.0, epsilon=0.0, sigma=0.0, r_cut=0.0)
-            nb.pair_coeff.set(ai, 'Z', lam=0.0, epsilon=0.0, sigma=0.0, r_cut=0.0)
-            for ii in one_rna_type:
-                for jj in one_rna_type:
-                    nb.pair_coeff.set(ii, jj, lam=0.0, epsilon=0.0, sigma=0.0, r_cut=0.0)
-                nb.pair_coeff.set(ii, 'R', lam=0.0, epsilon=0.0, sigma=0.0, r_cut=0.0)
-                nb.pair_coeff.set(ii, 'Z', lam=0.0, epsilon=0.0, sigma=0.0, r_cut=0.0)
-            for k in one_rna_type:
-                nb.pair_coeff.set(ai, k, lam=0.0, epsilon=0.0, sigma=0.0, r_cut=0.0)
-        nb.pair_coeff.set('R', 'R', lam=0.0, epsilon=0.0, sigma=0.0, r_cut=0.0)
-        nb.pair_coeff.set('R', 'Z', lam=0.0, epsilon=0.0, sigma=0.0, r_cut=0.0)
-        nb.pair_coeff.set('Z', 'Z', lam=0.0, epsilon=0.0, sigma=0.0, r_cut=0.0)
-
-        return nb
     
-    nb = ashbaugh_interactions(types, aa_param_combined, aa2_type_rigid_1, aa2_type_rigid_2, one_rna_type, nl)
+    # # nonbonded:
+    # electrostatic screening
+    yukawa = hoomd.md.pair.Yukawa(nlist=cell)
+    for i in range(len(aa_type)):
+        atom1 = aa_type[i]
+        for j in range(i,len(aa_type)):
+            atom2 = aa_type[j]
+            yukawa.params[(atom1,atom2)] = dict(epsilon=aa_charge[i]*aa_charge[j]*1.73136, kappa=1.0)
+            yukawa.r_cut[(atom1,atom2)] = 3.5
+        yukawa.params[(atom1,'R')] = dict(epsilon=0, kappa=1.0)
+        yukawa.r_cut[(atom1,'R')] = 0.0
+    yukawa.params[('R','R')] = dict(epsilon=0, kappa=1.0)
+    yukawa.r_cut[('R','R')] = 0.0
+    
+    # HPS: ashbaugh-hatch potential
+    ashbaugh_table = hoomd.md.pair.Table(nlist=cell)
+    for i in range(len(aa_type)):
+        atom1 = aa_type[i]
+        for j in range(i,len(aa_type)):
+            atom2 = aa_type[j]
+            Ulist = hu.Ulist_ashbaugh(sigma=[aa_sigma[i], aa_sigma[j]], 
+                                      lambda_hps=[aa_lambda[i], aa_lambda[j]],
+                                      r_max=2.0, r_min=0.2, n_bins=100000, epsilon=0.8368)
+            Flist = hu.Flist_ashbaugh(sigma=[aa_sigma[i], aa_sigma[j]], 
+                                      lambda_hps=[aa_lambda[i], aa_lambda[j]],
+                                      r_max=2.0, r_min=0.2, n_bins=100000, epsilon=0.8368)
+            ashbaugh_table.params[(atom1, atom2)] = dict(r_min=0.2, U=Ulist, F=Flist)
+            ashbaugh_table.r_cut[(atom1, atom2)] = 2.0            
+        ashbaugh_table.params[(atom1, 'R')] = dict(r_min=0., U=[0], F=[0])
+        ashbaugh_table.r_cut[(atom1, 'R')] = 0 
+    ashbaugh_table.params[('R', 'R')] = dict(r_min=0., U=[0], F=[0])
+    ashbaugh_table.r_cut[('R', 'R')] = 0 
+    
+    # cation-pi interaction
+    ashbaugh_table = hoomd.md.pair.Table(nlist=cell)
+    for i in range(len(aa_type)):
+        atom1 = aa_type[i]
+        for j in range(i,len(aa_type)):
+            atom2 = aa_type[j]
+            Ulist = hu.Ulist_ashbaugh(sigma=[aa_sigma[i], aa_sigma[j]], 
+                                      lambda_hps=[aa_lambda[i], aa_lambda[j]],
+                                      r_max=2.0, r_min=0.2, n_bins=100000, epsilon=0.8368)
+            Flist = hu.Flist_ashbaugh(sigma=[aa_sigma[i], aa_sigma[j]], 
+                                      lambda_hps=[aa_lambda[i], aa_lambda[j]],
+                                      r_max=2.0, r_min=0.2, n_bins=100000, epsilon=0.8368)
+            ashbaugh_table.params[(atom1, atom2)] = dict(r_min=0.2, U=Ulist, F=Flist)
+            ashbaugh_table.r_cut[(atom1, atom2)] = 2.0            
+        ashbaugh_table.params[(atom1, 'R')] = dict(r_min=0., U=[0], F=[0])
+        ashbaugh_table.r_cut[(atom1, 'R')] = 0 
+    ashbaugh_table.params[('R', 'R')] = dict(r_min=0., U=[0], F=[0])
+    ashbaugh_table.r_cut[('R', 'R')] = 0 
+
+    # ## INTEGRATOR
+    integrator = hoomd.md.Integrator(production_dt, integrate_rotational_dof=True)        
+    # method : Langevin
+    langevin = hoomd.md.methods.Langevin(filter=moving_group, kT=temp)
+    for i,name in enumerate(aa_type):
+        langevin.gamma[name] = aa_mass[i]/1000.0
+        langevin.gamma_r[name] = (0.0, 0.0, 0.0)
+    langevin.gamma['R'] = ck1d_mass/1000.0
+    langevin.gamma_r['R'] = (1.0, 1.0, 1.0)
+    # constraints : rigid body
+    integrator.rigid = rigid
+    # forces 
+    integrator.forces.append(harmonic)
+    integrator.forces.append(yukawa)
+    integrator.forces.append(ashbaugh_table)
+    integrator.methods.append(langevin)
+    
+    # ## LOGGING
+    # dump files
+    dump_gsd = hoomd.write.GSD(trigger=hoomd.trigger.Periodic(dt_dump), 
+                               filename=logfile+'_dump.gsd', filter=all_group,
+                               dynamic=['property', 'momentum', 'attribute', 'topology'])                  # you can add [attributes(particles/typeid)] to trace phosphorylation
+    #active_ser_dcd = hoomd.write.DCD(trigger=hoomd.trigger.Periodic(dt_active_ser),
+    #                                 filename='activeCK1d_SER_exl'+str(ex_number)+'_dump.dcd',
+    #                                 filter=active_ser_group)
+    active_ser_gsd = hoomd.write.GSD(trigger=hoomd.trigger.Periodic(dt_active_ser),
+                                     filename=logfile+'_activeCK1d_SER_dump.gsd',
+                                     filter=active_ser_group)
+    
+    # back-up files
+    sim_info_log = hoomd.logging.Logger()
+    sim_info_log.add(sim)
+    backup1_gsd = hoomd.write.GSD(trigger=hoomd.trigger.Periodic(dt_backup), 
+                                  filename=logfile+'_restart1.gsd', filter=all_group,
+                                  mode='wb', truncate=True, log=sim_info_log)
+    backup2_gsd = hoomd.write.GSD(trigger=hoomd.trigger.Periodic(dt_backup, phase=int(dt_backup/2.)), 
+                                  filename=logfile+'_restart2.gsd', filter=all_group,
+                                  mode='wb', truncate=True, log=sim_info_log)
+    
+    # thermodynamical quantities
+    therm_quantities = hoomd.md.compute.ThermodynamicQuantities(filter=all_group)
+    tq_log = hoomd.logging.Logger()
+    tq_log.add(therm_quantities)
+    tq_gsd = hoomd.write.GSD(trigger=hoomd.trigger.Periodic(dt_log), 
+                             filename=logfile+'_log.gsd', filter=hoomd.filter.Null(),
+                             log=tq_log)
+    
+    # # Custom action
+    print(f"Initial time: {time.time()-time_start}")
+    time_start = time.time()
+    time_action = PrintTimestep(time_start)
+    time_writer = hoomd.write.CustomWriter(action=time_action, trigger=hoomd.trigger.Periodic(dt_time))
+    
+    changeser_action = ChangeSerine(active_serials=activeCK1d_serials, ser_serials=ser_serials, forces=[yukawa, ashbaugh_table], 
+                                    glb_contacts=contacts, temp=temp, Dmu=Dmu, box_size=box_lenght, contact_dist=contact_dist)
+    changeser_updater = hoomd.update.CustomUpdater(action=changeser_action, trigger=hoomd.trigger.Periodic(dt_try_change))
+
+    contacts_action = ContactsBackUp(glb_contacts=contacts)
+    contacts_bckp_writer = hoomd.write.CustomWriter(action=contacts_action, trigger=hoomd.trigger.Periodic(dt_backup))
+    
+    # ## SET SIMULATION OPERATIONS
+    sim.operations.integrator = integrator 
+    sim.operations.computes.append(therm_quantities)
+    
+    sim.operations.writers.append(dump_gsd)
+    sim.operations.writers.append(active_ser_gsd)
+    #sim.operations.writers.append(active_ser_dcd)
+    sim.operations.writers.append(backup1_gsd)
+    sim.operations.writers.append(backup2_gsd)
+    sim.operations.writers.append(tq_gsd)
+    sim.operations += time_writer
+    sim.operations += changeser_updater
+    sim.operations += contacts_bckp_writer
+
+    sim.run(production_steps-init_step)
+    
+    if start==1 and len(contacts)!=0:
+        cont_prev = np.loadtxt(logfile+"_contacts.txt")
+        if len(cont_prev)!=0:
+            if cont_prev.ndim==1:
+                cont_prev = [cont_prev]
+            contacts = np.append(cont_prev, contacts, axis=0)
+        np.savetxt(logfile+"_contacts.txt", contacts, fmt='%f', header="# timestep    SER index    acc    distance     dU  \n# acc= {0->phospho rejected, 1->phospho accepted, 2->dephospho rejected, -1->dephospho accepted} ")
+    elif start==0:
+        np.savetxt(logfile+"_contacts.txt", contacts, fmt='%f', header="# timestep    SER index    acc    distance     dU  \n# acc= {0->phospho rejected, 1->phospho accepted, 2->dephospho rejected, -1->dephospho accepted} ")    
+
+    hoomd.write.GSD.write(state=sim.state, filename=logfile+'_end.gsd')
+    
