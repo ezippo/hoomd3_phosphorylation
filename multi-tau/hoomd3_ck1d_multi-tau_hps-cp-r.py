@@ -354,7 +354,7 @@ if __name__=='__main__':
         langevin.gamma[name] = aa_mass[i]/1000.0
         langevin.gamma_r[name] = (0.0, 0.0, 0.0)
     langevin.gamma['R'] = ck1d_mass/1000.0
-    langevin.gamma_r['R'] = (1.0, 1.0, 1.0)
+    langevin.gamma_r['R'] = (4.0, 4.0, 4.0)
     # constraints : rigid body
     integrator.rigid = rigid
     # forces 
