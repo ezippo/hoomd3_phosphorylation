@@ -90,10 +90,9 @@ class ChangeSerine(hoomd.custom.Action):
 
             else:
                 raise Exception(f"Residue {ser_index} is not a serine!")
-        
-        logging.debug(f"ChangeSerine: type SER/SEP {snap.particles.typeid[ser_index]}")
-
-
+    
+    
+    
 class ContactsBackUp(hoomd.custom.Action):
 
     def __init__(self, glb_contacts):

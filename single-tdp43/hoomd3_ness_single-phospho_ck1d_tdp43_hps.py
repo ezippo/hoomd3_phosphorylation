@@ -112,9 +112,9 @@ class ReservoirExchange(hoomd.custom.Action):
         active_pos = positions[self._active_serials]
         distances = hu.compute_distances_pbc(active_pos, positions[self._ser_serials], self._box_size)
         distances = np.min(distances, axis=0)
-        max_dist = np.max(distances)
+        min_dist = np.min(distances)
 
-        if max_dist>self._bath_dist:
+        if min_dist>self._bath_dist:
             if snap.particles.typeid[self._ser_serials]==15:
                 U_in = self._forces[0].energy + self._forces[1].energy
                 snap.particles.typeid[self._ser_serials] = 20
@@ -122,7 +122,7 @@ class ReservoirExchange(hoomd.custom.Action):
                 U_fin = self._forces[0].energy + self._forces[1].energy
                 logging.debug(f"U_fin = {U_fin}, U_in = {U_in}")
                 if metropolis_boltzmann(U_fin-U_in, 0, self._temp):
-                    self._glb_changes += [[timestep, self._ser_serials, 10, dist, U_fin-U_in]]
+                    self._glb_changes += [[timestep, self._ser_serials, 10, min_dist, U_fin-U_in]]
                 else:
                     snap.particles.typeid[self._ser_serials] = 15
                     self._state.set_snapshot(snap)
@@ -134,7 +134,7 @@ class ReservoirExchange(hoomd.custom.Action):
                 U_fin = self._forces[0].energy + self._forces[1].energy
                 logging.debug(f"U_fin = {U_fin}, U_in = {U_in}")
                 if metropolis_boltzmann(U_fin-U_in, 0, self._temp):
-                    self._glb_changes += [[timestep, self._ser_serials, -10, dist, U_fin-U_in]]
+                    self._glb_changes += [[timestep, self._ser_serials, -10, min_dist, U_fin-U_in]]
                 else:
                     snap.particles.typeid[self._ser_serials] = 20
                     self._state.set_snapshot(snap)
