@@ -19,7 +19,7 @@ def metropolis_boltzmann(dU, dmu, beta=2.494338):
         return True
     else:
         return False
-
+                    
 
 # ### CUSTOM ACTIONS
 class PrintTimestep(hoomd.custom.Action):
@@ -32,29 +32,61 @@ class PrintTimestep(hoomd.custom.Action):
         current_time = current_time - self._t_start
         print(f"Elapsed time {current_time} | Step {timestep}/{production_steps} " )
 
+class ChangeSerine(hoomd.custom.Action):
 
-class ContactDetector(hoomd.custom.Action):
-
-    def __init__(self, active_serials, ser_serials, glb_contacts, box_size, contact_dist):
+    def __init__(self, active_serials, ser_serials, forces, glb_contacts, temp, Dmu, box_size, contact_dist):
         self._active_serials = active_serials
         self._ser_serials = ser_serials
+        self._forces = forces
         self._glb_contacts = glb_contacts
+        self._temp = temp
+        self._Dmu = Dmu
         self._box_size = box_size
         self._contact_dist = contact_dist
-        
+
     def act(self, timestep):
         snap = self._state.get_snapshot()
         positions = snap.particles.position
         active_pos = positions[self._active_serials]
         distances = hu.compute_distances_pbc(active_pos, positions[self._ser_serials], self._box_size)
         distances = np.max(distances, axis=0)
-        logging.debug(f"ChangeSerine: distances {distances}")
         min_dist = np.min(distances)
+
         if min_dist<self._contact_dist:
             ser_index = self._ser_serials[np.argmin(distances)]
-            logging.debug(f"ChangeSerine: ser_index {ser_index}")
-            self._glb_contacts += [[timestep, ser_index, -2, min_dist, 0.]]
-            
+
+            if snap.particles.typeid[ser_index]==15:
+                U_in = self._forces[0].energy + self._forces[1].energy
+                snap.particles.typeid[ser_index] = 20
+                self._state.set_snapshot(snap)
+                U_fin = self._forces[0].energy + self._forces[1].energy
+                logging.debug(f"U_fin = {U_fin}, U_in = {U_in}")
+                if metropolis_boltzmann(U_fin-U_in, self._Dmu, self._temp):
+                    logging.info(f"Phosphorylation occured: SER id {ser_index}")
+                    self._glb_contacts += [[timestep, ser_index, 1, min_dist, U_fin-U_in]]
+                else:
+                    snap.particles.typeid[ser_index] = 15
+                    self._state.set_snapshot(snap)
+                    logging.info(f'Phosphorylation SER id {ser_index} not accepted')
+                    self._glb_contacts += [[timestep, ser_index, 0, min_dist, U_fin-U_in]]
+                    
+            elif snap.particles.typeid[ser_index]==20:
+                U_in = self._forces[0].energy + self._forces[1].energy
+                snap.particles.typeid[ser_index] = 15
+                self._state.set_snapshot(snap)
+                U_fin = self._forces[0].energy + self._forces[1].energy
+                logging.debug(f"U_fin = {U_fin}, U_in = {U_in}")
+                if metropolis_boltzmann(U_fin-U_in, -self._Dmu, self._temp):
+                    logging.info(f"Dephosphorylation occured: SER id {ser_index}")
+                    self._glb_contacts += [[timestep, ser_index, -1, min_dist, U_fin-U_in]]
+                else:
+                    snap.particles.typeid[ser_index] = 20
+                    self._state.set_snapshot(snap)
+                    logging.info(f'Dephosphorylation SER id {ser_index} not accepted')
+                    self._glb_contacts += [[timestep, ser_index, 2, min_dist, U_fin-U_in]]
+
+            else:
+                raise Exception(f"Residue {ser_index} is not a serine!")
 
 
 class ContactsBackUp(hoomd.custom.Action):
@@ -63,9 +95,8 @@ class ContactsBackUp(hoomd.custom.Action):
         self._glb_contacts = glb_contacts
 
     def act(self, timestep):
-        np.savetxt(logfile+"_contactsBCKP.txt", self._glb_contacts, fmt='%f', header="# timestep    SER index    acc    distance     dU  \n# acc=-2 -> no phosphorylation tried ")
+        np.savetxt(logfile+"_contactsBCKP.txt", self._glb_contacts, fmt='%f', header="# timestep    SER index    acc    distance     dU  \n# acc= {0->phospho rejected, 1->phospho accepted, 2->dephospho rejected, -1->dephospho accepted} ")
 
-                
 
 # --------------------------- MAIN ------------------------------
 
@@ -102,7 +133,7 @@ if __name__=='__main__':
     dt_backup = int(macro_dict['dt_backup'])
     dt_try_change = int(macro_dict['dt_try_change'])
     dt_time = int(macro_dict['dt_time'])
-    dt_active_ser = int(macro_dict['dt_active_ser'])
+    
 
     # ### Input parameters for all the amino acids 
     aa_param_dict = hu.aa_stats_from_file(stat_file)
@@ -130,7 +161,7 @@ if __name__=='__main__':
     # ### HOOMD3 routine
     # ## INITIALIZATION
     device = hoomd.device.CPU(notice_level=2)
-    sim = hoomd.Simulation(device=device, seed=seed)    
+    sim = hoomd.Simulation(device=device, seed=seed)
     if start==0:
         traj = gsd.hoomd.open(file_start)
         snap = traj[0]
@@ -140,12 +171,12 @@ if __name__=='__main__':
         sim.create_state_from_gsd(filename=file_start)
         snap = sim.state.get_snapshot()
     init_step = sim.initial_timestep
-    
+
     ck1d_mass = snap.particles.mass[0]
     
     type_id = snap.particles.typeid
     ser_serials = np.where(np.isin(type_id[:155],[15,20]))[0]
-    activeCK1d_serials = [301, 302, 303]     # [171, 204, 301, 302, 303, 304, 305]
+    activeCK1d_serials = [30800+147, 30800+148, 30800+149]     # [171, 204, 301, 302, 303, 304, 305]
     logging.debug(f"Snapshot.particles.typeid : {type_id}")
     cation_type = [1, 11]                       # Arg (1), Lys (11)
     pi_type = [13, 17, 18]                      # Phe (13), Trp (17), Tyr (18)
@@ -163,9 +194,6 @@ if __name__=='__main__':
     # # groups
     all_group = hoomd.filter.All()
     moving_group = hoomd.filter.Rigid(("center", "free"))
-    ser_group = hoomd.filter.Tags(list(ser_serials))
-    active_group = hoomd.filter.Tags(activeCK1d_serials)
-    active_ser_group = hoomd.filter.Union(active_group, ser_group)
     
     # ## PAIR INTERACTIONS
     cell = hoomd.md.nlist.Cell(buffer=0.4, exclusions=('bond', 'body'))
@@ -314,7 +342,7 @@ if __name__=='__main__':
     ashbaugh_catpi_table.r_cut[('R', 'R')] = 0 
     logging.debug(f"Interactions: cation-pi R-R (=0)")
 
-    
+
     # ## INTEGRATOR
     integrator = hoomd.md.Integrator(production_dt, integrate_rotational_dof=True)        
     # method : Langevin
@@ -325,8 +353,8 @@ if __name__=='__main__':
     for i,name in enumerate(aa_type_r):
         langevin.gamma[name] = aa_mass[i]/1000.0
         langevin.gamma_r[name] = (0.0, 0.0, 0.0)
-    langevin.gamma['R'] = ck1d_tot_mass/1000.0
-    langevin.gamma_r['R'] = (4.0, 4.0, 4.0)
+    langevin.gamma['R'] = ck1d_mass/1000.0
+    langevin.gamma_r['R'] = (1.0, 1.0, 1.0)
     # constraints : rigid body
     integrator.rigid = rigid
     # forces 
@@ -339,13 +367,8 @@ if __name__=='__main__':
     # ## LOGGING
     # dump files
     dump_gsd = hoomd.write.GSD(trigger=hoomd.trigger.Periodic(dt_dump), 
-                               filename=logfile+'_dump.gsd', filter=all_group, dynamic=['property', 'attribute'])                  # you can add [attributes(particles/typeid)] to trace phosphorylation
-    #active_ser_dcd = hoomd.write.DCD(trigger=hoomd.trigger.Periodic(dt_active_ser),
-    #                                 filename='activeCK1d_SER_exl'+str(ex_number)+'_dump.dcd',
-    #                                 filter=active_ser_group)
-    active_ser_gsd = hoomd.write.GSD(trigger=hoomd.trigger.Periodic(dt_active_ser),
-                                     filename=logfile+'_activeCK1d_SER_dump.gsd',
-                                     filter=active_ser_group)
+                               filename=logfile+'_dump.gsd', filter=all_group,
+                               dynamic=['property', 'momentum', 'attribute', 'topology'])                  # you can add [attributes(particles/typeid)] to trace phosphorylation
     
     # back-up files
     sim_info_log = hoomd.logging.Logger()
@@ -356,6 +379,7 @@ if __name__=='__main__':
     backup2_gsd = hoomd.write.GSD(trigger=hoomd.trigger.Periodic(dt_backup, phase=int(dt_backup/2.)), 
                                   filename=logfile+'_restart2.gsd', filter=all_group,
                                   mode='wb', truncate=True, log=sim_info_log)
+    
     
     # thermodynamical quantities
     therm_quantities = hoomd.md.compute.ThermodynamicQuantities(filter=all_group)
@@ -371,39 +395,36 @@ if __name__=='__main__':
     time_action = PrintTimestep(time_start)
     time_writer = hoomd.write.CustomWriter(action=time_action, trigger=hoomd.trigger.Periodic(dt_time))
     
-    detector_action = ContactDetector(active_serials=activeCK1d_serials, ser_serials=ser_serials, glb_contacts=contacts, 
-                                    box_size=box_lenght, contact_dist=contact_dist)
-    detector_updater = hoomd.update.CustomUpdater(action=detector_action, trigger=hoomd.trigger.Periodic(dt_try_change))
+    changeser_action = ChangeSerine(active_serials=activeCK1d_serials, ser_serials=ser_serials, forces=[yukawa, ashbaugh_table], 
+                                    glb_contacts=contacts, temp=temp, Dmu=Dmu, box_size=box_lenght, contact_dist=contact_dist)
+    changeser_updater = hoomd.update.CustomUpdater(action=changeser_action, trigger=hoomd.trigger.Periodic(dt_try_change))
 
     contacts_action = ContactsBackUp(glb_contacts=contacts)
-    contacts_bckp_writer = hoomd.write.CustomWriter(action=contacts_action, trigger=hoomd.trigger.Periodic(dt_backup))
+    contacts_bckp_writer = hoomd.write.CustomWriter(action=contacts_action, trigger=hoomd.trigger.Periodic(int(dt_backup/2)))
     
     # ## SET SIMULATION OPERATIONS
     sim.operations.integrator = integrator 
     sim.operations.computes.append(therm_quantities)
-    
+
     sim.operations.writers.append(dump_gsd)
-    sim.operations.writers.append(active_ser_gsd)
-    #sim.operations.writers.append(active_ser_dcd)
     sim.operations.writers.append(backup1_gsd)
     sim.operations.writers.append(backup2_gsd)
     sim.operations.writers.append(tq_gsd)
     sim.operations += time_writer
-    sim.operations += detector_updater
+    sim.operations += changeser_updater
     sim.operations += contacts_bckp_writer
 
     sim.run(production_steps-init_step)
-    
+#    sim.run(production_steps)
     if start==1 and len(contacts)!=0:
         cont_prev = np.loadtxt(logfile+"_contacts.txt")
         if len(cont_prev)!=0:
             if cont_prev.ndim==1:
                 cont_prev = [cont_prev]
             contacts = np.append(cont_prev, contacts, axis=0)
-        np.savetxt(logfile+"_contacts.txt", contacts, fmt='%f', header="# timestep    SER index    acc    distance     dU  \n# acc=-2 -> no phosphorylation tried ")
+        np.savetxt(logfile+"_contacts.txt", contacts, fmt='%f', header="# timestep    SER index    acc    distance     dU  \n# acc= {0->phospho rejected, 1->phospho accepted, 2->dephospho rejected, -1->dephospho accepted} ")
     elif start==0:
-        np.savetxt(logfile+"_contacts.txt", contacts, fmt='%f', header="# timestep    SER index    acc    distance     dU  \n# acc=-2 -> no phosphorylation tried ")
-
-    hoomd.write.GSD.write(state=sim.state, filename=logfile+'_end.gsd')
+        np.savetxt(logfile+"_contacts.txt", contacts, fmt='%f', header="# timestep    SER index    acc    distance     dU  \n# acc= {0->phospho rejected, 1->phospho accepted, 2->dephospho rejected, -1->dephospho accepted} ")
     
+    hoomd.write.GSD.write(state=sim.state, filename=logfile+'_end.gsd')
     

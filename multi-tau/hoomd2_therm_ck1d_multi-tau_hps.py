@@ -118,7 +118,6 @@ if __name__=='__main__':
     for i,name in enumerate(aa_type):
         integrator.set_gamma(name,gamma=aa_mass[i]/1000.0)
     integrator.set_gamma('R', gamma=ck1d_mass/1000.0)
-    integrator.set_gamma_r('R', gamma_r=(4.0,4.0,4.0))
  
     # ## LOGGING
     # dump files

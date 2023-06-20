@@ -91,6 +91,7 @@ class ChangeSerine(hoomd.custom.Action):
             else:
                 raise Exception(f"Residue {ser_index} is not a serine!")
 
+   
 
 class ContactsBackUp(hoomd.custom.Action):
 

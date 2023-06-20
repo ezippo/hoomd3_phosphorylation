@@ -150,7 +150,8 @@ class ContactsBackUp(hoomd.custom.Action):
         self._glb_contacts = glb_contacts
 
     def act(self, timestep):
-        np.savetxt(logfile+"_contactsBCKP.txt", self._glb_contacts, fmt='%f', header="# timestep    SER index    acc    distance     dU  \n# acc= {0->phospho rejected, 1->phospho accepted, 2->dephospho rejected, -1->dephospho accepted} ")
+        if len(self._glb_contacts)!=0:
+            np.savetxt(logfile+"_contactsBCKP.txt", self._glb_contacts, fmt='%f', header="# timestep    SER index    acc    distance     dU  \n# acc= {0->phospho rejected, 1->phospho accepted, 2->dephospho rejected, -1->dephospho accepted} ")
 
 
 class ChangesBackUp(hoomd.custom.Action):
@@ -159,7 +160,8 @@ class ChangesBackUp(hoomd.custom.Action):
         self._glb_changes = glb_changes
 
     def act(self, timestep):
-        np.savetxt(logfile+"_changesBCKP.txt", self._glb_changes, fmt='%f', header="# timestep    SER index    acc    distance     dU  \n# acc= {1->phosphorylation, 10->change SER with SEP, -1->dephospho accepted, -10->change SEP with SER} ")
+        if len(self._glb_changes)!=0:
+            np.savetxt(logfile+"_changesBCKP.txt", self._glb_changes, fmt='%f', header="# timestep    SER index    acc    distance     dU  \n# acc= {1->phosphorylation, 10->change SER with SEP, -1->dephospho accepted, -10->change SEP with SER} ")
 
 
 
@@ -168,7 +170,7 @@ class ChangesBackUp(hoomd.custom.Action):
 if __name__=='__main__':
     # TIME START
     time_start = time.time()
-    logging.basicConfig(level=logging.WARNING)
+    logging.basicConfig(level=logging.DEBUG)
 
     # UNITS: distance -> nm   (!!!positions and sigma in files are in agstrom!!!)
     #        mass -> amu
@@ -215,6 +217,8 @@ if __name__=='__main__':
         aa_charge.append(aa_param_dict[k][1])
         aa_sigma.append(aa_param_dict[k][2]/10.)
         aa_lambda.append(aa_param_dict[k][3])
+    aa_type_r = [ f'{name}_r' for name in aa_type ]
+    n_aa = len(aa_type)
 
     ck1d_id, ck1d_mass, ck1d_charge, ck1d_sigma, ck1d_pos = hu.aa_stats_sequence(filein_ck1d, aa_param_dict)
     ck1d_pos_arr = np.array(ck1d_pos)/10.
@@ -244,11 +248,14 @@ if __name__=='__main__':
     ser_serials = np.where(np.isin(type_id[:155],[15,20]))[0]
     single_ser = [ser_serials[ser_index]]
     activeCK1d_serials = [301, 302, 303]     # [171, 204, 301, 302, 303, 304, 305]
+    logging.debug(f"Snapshot.particles.typeid : {type_id}")
+    cation_type = [1, 11]                       # Arg (1), Lys (11)
+    pi_type = [13, 17, 18]                      # Phe (13), Trp (17), Tyr (18)
  
     # # rigid body
     rigid = hoomd.md.constrain.Rigid()
     rigid.body['R'] = {
-        "constituent_types": [aa_type[ck1d_id[i]] for i in range(ck1d_length)],
+        "constituent_types": [aa_type_r[ck1d_id[i]] for i in range(ck1d_length)],
         "positions": ck1d_rel_pos,
         "orientations": [(1,0,0,0)]*ck1d_length,
         "charges": ck1d_charge,
@@ -271,22 +278,45 @@ if __name__=='__main__':
     
     # # electrostatics forces
     yukawa = hoomd.md.pair.Yukawa(nlist=cell)
+
     for i in range(len(aa_type)):
         atom1 = aa_type[i]
-        for j in range(i,len(aa_type)):
+        for j in range(i,len(aa_type)):             # interactions IDP-IDP
             atom2 = aa_type[j]
             yukawa.params[(atom1,atom2)] = dict(epsilon=aa_charge[i]*aa_charge[j]*1.73136, kappa=1.0)
             yukawa.r_cut[(atom1,atom2)] = 3.5
+            logging.debug(f"Interactions: yukawa {atom1}-{atom2}")
         yukawa.params[(atom1,'R')] = dict(epsilon=0, kappa=1.0)
         yukawa.r_cut[(atom1,'R')] = 0.0
+        logging.debug(f"Interactions: yukawa {atom1}-R (=0)")
+    
+        for j in range(len(aa_type_r)):             # interactions IDP-globular
+            atom2_r = aa_type_r[j]
+            yukawa.params[(atom1,atom2_r)] = dict(epsilon=aa_charge[i]*aa_charge[j]*1.73136, kappa=1.0)
+            yukawa.r_cut[(atom1,atom2_r)] = 3.5
+            logging.debug(f"Interactions: yukawa {atom1}-{atom2_r}")
+        
+    for i in range(len(aa_type_r)):
+        atom1_r = aa_type_r[i] 
+        for j in range(len(aa_type_r)):             # interactions globular-globular =0 (body exclusion)
+            atom2_r = aa_type_r[j]
+            yukawa.params[(atom1_r,atom2_r)] = dict(epsilon=0, kappa=1.0)
+            yukawa.r_cut[(atom1_r,atom2_r)] = 0.0
+            logging.debug(f"Interactions: yukawa {atom1_r}-{atom2_r} (=0)")
+        yukawa.params[(atom1_r,'R')] = dict(epsilon=0, kappa=1.0)
+        yukawa.r_cut[(atom1_r,'R')] = 0.0
+        logging.debug(f"Interactions: yukawa {atom1_r}-R (=0)")
+
     yukawa.params[('R','R')] = dict(epsilon=0, kappa=1.0)
     yukawa.r_cut[('R','R')] = 0.0
+    logging.debug(f"Interactions: yukawa R-R (=0)")
     
-    # # nonbonded: ashbaugh-hatch potential
+    # HPS: ashbaugh-hatch potential
     ashbaugh_table = hoomd.md.pair.Table(nlist=cell)
+
     for i in range(len(aa_type)):
         atom1 = aa_type[i]
-        for j in range(i,len(aa_type)):
+        for j in range(i,len(aa_type)):             # interactions IDP-IDP
             atom2 = aa_type[j]
             Ulist = hu.Ulist_ashbaugh(sigma=[aa_sigma[i], aa_sigma[j]], 
                                       lambda_hps=[aa_lambda[i], aa_lambda[j]],
@@ -296,16 +326,105 @@ if __name__=='__main__':
                                       r_max=2.0, r_min=0.2, n_bins=100000, epsilon=0.8368)
             ashbaugh_table.params[(atom1, atom2)] = dict(r_min=0.2, U=Ulist, F=Flist)
             ashbaugh_table.r_cut[(atom1, atom2)] = 2.0            
+            logging.debug(f"Interactions: HPS {atom1}-{atom2}")
         ashbaugh_table.params[(atom1, 'R')] = dict(r_min=0., U=[0], F=[0])
         ashbaugh_table.r_cut[(atom1, 'R')] = 0 
+        logging.debug(f"Interactions: HPS {atom1}-R (=0)")
+        
+        for j in range(len(aa_type_r)):             # interactions IDP-globular
+            atom2_r = aa_type_r[j]
+            Ulist = hu.Ulist_ashbaugh(sigma=[aa_sigma[i], aa_sigma[j]], 
+                                      lambda_hps=[0.7*aa_lambda[i], 0.7*aa_lambda[j]],
+                                      r_max=2.0, r_min=0.2, n_bins=100000, epsilon=0.8368)          # Scale down lamba by 30% for interactions with rigid body particles 
+            Flist = hu.Flist_ashbaugh(sigma=[aa_sigma[i], aa_sigma[j]], 
+                                      lambda_hps=[0.7*aa_lambda[i], 0.7*aa_lambda[j]],
+                                      r_max=2.0, r_min=0.2, n_bins=100000, epsilon=0.8368)          # Scale down lamba by 30% for interactions with rigid body particles 
+            ashbaugh_table.params[(atom1, atom2_r)] = dict(r_min=0.2, U=Ulist, F=Flist)
+            ashbaugh_table.r_cut[(atom1, atom2_r)] = 2.0            
+            logging.debug(f"Interactions: HPS {atom1}-{atom2_r}")
+
+    for i in range(len(aa_type_r)):
+        atom1_r = aa_type_r[i] 
+        for j in range(len(aa_type_r)):             # interactions globular-globular =0 (body exclusion)
+            atom2_r = aa_type_r[j]
+            ashbaugh_table.params[(atom1_r, atom2_r)] = dict(r_min=0., U=[0], F=[0])
+            ashbaugh_table.r_cut[(atom1_r, atom2_r)] = 0   
+            logging.debug(f"Interactions: HPS {atom1_r}-{atom2_r} (=0)")
+        ashbaugh_table.params[(atom1_r, 'R')] = dict(r_min=0., U=[0], F=[0])
+        ashbaugh_table.r_cut[(atom1_r, 'R')] = 0
+        logging.debug(f"Interactions: HPS {atom1_r}-R (=0)")
+
     ashbaugh_table.params[('R', 'R')] = dict(r_min=0., U=[0], F=[0])
     ashbaugh_table.r_cut[('R', 'R')] = 0 
+    logging.debug(f"Interactions: HPS R-R (=0)")
     
+    # cation-pi interaction
+    ashbaugh_catpi_table = hoomd.md.pair.Table(nlist=cell)
+
+    for i in range(len(aa_type)):
+        atom1 = aa_type[i]
+        for j in range(i,len(aa_type)):             # interactions IDP-IDP
+            atom2 = aa_type[j]
+            if (i in cation_type and j in pi_type) or (j in cation_type and i in pi_type):
+                Ulist = hu.Ulist_ashbaugh(sigma=[aa_sigma[i], aa_sigma[j]], 
+                                        lambda_hps=1.0,
+                                        r_max=2.0, r_min=0.2, n_bins=100000, epsilon=3.138)
+                Flist = hu.Flist_ashbaugh(sigma=[aa_sigma[i], aa_sigma[j]], 
+                                        lambda_hps=1.0,
+                                        r_max=2.0, r_min=0.2, n_bins=100000, epsilon=3.138)
+                ashbaugh_catpi_table.params[(atom1, atom2)] = dict(r_min=0.2, U=Ulist, F=Flist)
+                ashbaugh_catpi_table.r_cut[(atom1, atom2)] = 2.0            
+                logging.debug(f"Interactions: cation-pi {atom1}-{atom2}")
+            else:
+                ashbaugh_catpi_table.params[(atom1, atom2)] = dict(r_min=0., U=[0], F=[0])
+                ashbaugh_catpi_table.r_cut[(atom1, atom2)] = 0 
+                logging.debug(f"Interactions: cation-pi {atom1}-{atom2} (=0)")
+
+        ashbaugh_catpi_table.params[(atom1, 'R')] = dict(r_min=0., U=[0], F=[0])
+        ashbaugh_catpi_table.r_cut[(atom1, 'R')] = 0 
+        logging.debug(f"Interactions: cation-pi {atom1}-R (=0)")
+        
+        for j in range(len(aa_type_r)):             # interactions IDP-globular
+            atom2_r = aa_type_r[j]
+            if (i in cation_type and j in pi_type) or (j in cation_type and i in pi_type):
+                Ulist = hu.Ulist_ashbaugh(sigma=[aa_sigma[i], aa_sigma[j]], 
+                                        lambda_hps=1.0,
+                                        r_max=2.0, r_min=0.2, n_bins=100000, epsilon=2.1966)         # Scale down epsilon by 30% for interactions with rigid body particles 
+                Flist = hu.Flist_ashbaugh(sigma=[aa_sigma[i], aa_sigma[j]], 
+                                        lambda_hps=1.0,
+                                        r_max=2.0, r_min=0.2, n_bins=100000, epsilon=2.1966)         # Scale down epsilon by 30% for interactions with rigid body particles 
+                ashbaugh_catpi_table.params[(atom1, atom2_r)] = dict(r_min=0.2, U=Ulist, F=Flist)
+                ashbaugh_catpi_table.r_cut[(atom1, atom2_r)] = 2.0     
+                logging.debug(f"Interactions: cation-pi {atom1}-{atom2_r}")
+            else:
+                ashbaugh_catpi_table.params[(atom1, atom2_r)] = dict(r_min=0., U=[0], F=[0])
+                ashbaugh_catpi_table.r_cut[(atom1, atom2_r)] = 0 
+                logging.debug(f"Interactions: cation-pi {atom1}-{atom2_r} (=0)")
+
+    for i in range(len(aa_type_r)):
+        atom1_r = aa_type_r[i] 
+        for j in range(len(aa_type_r)):             # interactions globular-globular =0 (body exclusion)
+            atom2_r = aa_type_r[j]
+            ashbaugh_catpi_table.params[(atom1_r, atom2_r)] = dict(r_min=0., U=[0], F=[0])
+            ashbaugh_catpi_table.r_cut[(atom1_r, atom2_r)] = 0   
+            logging.debug(f"Interactions: cation-pi {atom1_r}-{atom2_r} (=0)")
+        ashbaugh_catpi_table.params[(atom1_r, 'R')] = dict(r_min=0., U=[0], F=[0])
+        ashbaugh_catpi_table.r_cut[(atom1_r, 'R')] = 0
+        logging.debug(f"Interactions: cation-pi {atom1_r}-R (=0)")
+
+    ashbaugh_catpi_table.params[('R', 'R')] = dict(r_min=0., U=[0], F=[0])
+    ashbaugh_catpi_table.r_cut[('R', 'R')] = 0 
+    logging.debug(f"Interactions: cation-pi R-R (=0)")
+
+
     # ## INTEGRATOR
     integrator = hoomd.md.Integrator(production_dt, integrate_rotational_dof=True)        
     # method : Langevin
     langevin = hoomd.md.methods.Langevin(filter=moving_group, kT=temp)
     for i,name in enumerate(aa_type):
+        langevin.gamma[name] = aa_mass[i]/1000.0
+        langevin.gamma_r[name] = (0.0, 0.0, 0.0)
+    for i,name in enumerate(aa_type_r):
         langevin.gamma[name] = aa_mass[i]/1000.0
         langevin.gamma_r[name] = (0.0, 0.0, 0.0)
     langevin.gamma['R'] = ck1d_mass/1000.0
@@ -316,6 +435,7 @@ if __name__=='__main__':
     integrator.forces.append(harmonic)
     integrator.forces.append(yukawa)
     integrator.forces.append(ashbaugh_table)
+    integrator.forces.append(ashbaugh_catpi_table)
     integrator.methods.append(langevin)
     
     # ## LOGGING
