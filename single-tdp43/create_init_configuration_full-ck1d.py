@@ -73,8 +73,7 @@ if __name__=='__main__':
     print(I)
     I_diag, E_vec = np.linalg.eig(I)
     rigid_diag_pos = np.dot( E_vec.T, rigid_rel_pos.T).T
-    I_check = hu.protein_moment_inertia(rigid_diag_pos, rigid_mass)  #check
-    print(I_check) 
+
     
     # Initialize bond
     nbonds_ck1d = ck1d_length - rigid_length -1
