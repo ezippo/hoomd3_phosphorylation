@@ -444,6 +444,7 @@ def compute_center(pos):
     return center_pos
 
 
+
 if __name__=='__main__':
     dic = macros_from_file('input_test1.dat')
     tstep = dic['production_dt']
