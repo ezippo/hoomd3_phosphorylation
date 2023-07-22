@@ -44,17 +44,25 @@ def system_from_file(filename):
     Returns
     -------
     dict_list : list of dicts
-        [ dict('mol1', 'pdb1', 'N1', 'rigid1', 'active_sites1', 'phospho_sites1'), 
-          dict('mol2', 'pdb2', 'N2', 'rigid2', 'active_sites2', 'phospho_sites2'),
+        [ dict('mol1': ['pdb1', 'N1', 'rigid1', 'active_sites1', 'phospho_sites1']), 
+          dict('mol2': ['pdb2', 'N2', 'rigid2', 'active_sites2', 'phospho_sites2']),
           ... ]
     '''
-    aa_dict = {}
+    dict_list = []
     with open(filename, 'r') as fid:
         for line in fid:
-            if line[0]!='#':
-                line_list = line.rsplit()
-                aa_dict[line_list[0]] = np.loadtxt(line_list[1:], dtype=float)
-    return aa_dict
+            mol_dict = dict()              
+            if not line.startswith("#") and not line.isspace():
+                line_list = np.array(line.rsplit())
+                mol_dict['mol'] = line_list[0]    # mol name 
+                mol_dict['pdb'] = line_list[1]    # pdb file 
+                mol_dict['N'] = line_list[2]      # N molecules 
+                mol_dict['rigid'] = line_list[3]    # rigid body indexes
+                mol_dict['active_sites'] = line_list[4]    # active site indexes
+                mol_dict['phospho_sites'] = line_list[5]    # phospho site indexes
+                dict_list += [mol_dict]
+                
+    return dict_list
 
 
 def aa_stats_from_file(filename):
@@ -469,8 +477,5 @@ def compute_center(pos):
 
 
 if __name__=='__main__':
-    dic = macros_from_file('input_test1.dat')
-    tstep = dic['production_dt']
-    b_n = int(dic['box_lenght'])
-    print(tstep)
-    print(b_n)
+    a = system_from_file('/Users/zippoema/Desktop/phd/md_simulations/git_hub/input_stats/sys_ck1d_tdp43.dat')
+    print(a)
