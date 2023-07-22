@@ -1,0 +1,3 @@
+# mol	pdb				N	rigid		active_sites		phospho_sites
+CK1d	CA_ck1delta.pdb			1	1-292		147,148,149		0
+TDP43	CA_TDP-43_261truncated.pdb	1	0		0			SER

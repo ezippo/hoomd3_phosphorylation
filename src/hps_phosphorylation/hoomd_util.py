@@ -34,6 +34,29 @@ def macros_from_infile(infile):
     return macro_dict
 
 
+def system_from_file(filename):
+    '''
+    Parameters
+    ----------
+    filename : str
+        name of sysfile.
+
+    Returns
+    -------
+    dict_list : list of dicts
+        [ dict('mol1', 'pdb1', 'N1', 'rigid1', 'active_sites1', 'phospho_sites1'), 
+          dict('mol2', 'pdb2', 'N2', 'rigid2', 'active_sites2', 'phospho_sites2'),
+          ... ]
+    '''
+    aa_dict = {}
+    with open(filename, 'r') as fid:
+        for line in fid:
+            if line[0]!='#':
+                line_list = line.rsplit()
+                aa_dict[line_list[0]] = np.loadtxt(line_list[1:], dtype=float)
+    return aa_dict
+
+
 def aa_stats_from_file(filename):
     '''
     Parameters

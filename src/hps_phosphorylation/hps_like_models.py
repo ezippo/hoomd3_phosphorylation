@@ -4,27 +4,24 @@
 import sys,os
 import time
 import numpy as np
-import hoomd
+#import hoomd
 import gsd, gsd.hoomd
 import logging
 
-import hoomd_util as hu
+import hps_phosphorylation.hoomd_util as hu
 
 
-# --------------------------- MAIN ------------------------------
-
-if __name__=='__main__':
-    # TIME START
-    time_start = time.time()
-    #logging.basicConfig(level=logging.DEBUG)
-
+def simulate_hps_like(infile):
     # UNITS: distance -> nm   (!!!positions and sigma in files are in agstrom!!!)
     #        mass -> amu
     #        energy -> kJ/mol
-    #
-    # ### MACROs from file
-    input_file = sys.argv[1]
-    macro_dict = hu.macros_from_infile(input_file)
+    
+    # TIME START
+    time_start = time.time()
+    
+    ### MACROs from file
+    ## READ INPUT FILE
+    macro_dict = hu.macros_from_infile(infile)
     # Simulation parameters
     production_dt = float(macro_dict['production_dt'])        # Time step for production run in picoseconds
     production_steps = int(macro_dict['production_steps'])                       # Total number of steps 
@@ -35,20 +32,26 @@ if __name__=='__main__':
     contact_dist = float(macro_dict['contact_dist'])
     Dmu = float(macro_dict['Dmu'])
     seed = int(macro_dict['seed'])
-    # Files
-    stat_file = macro_dict['stat_file']
-    filein_ck1d = macro_dict['filein_enzyme']
-    file_start = macro_dict['file_start']
-    logfile = macro_dict['logfile']
     # Logging time interval
     dt_dump = int(macro_dict['dt_dump'])
     dt_log = int(macro_dict['dt_log'])
     dt_backup = int(macro_dict['dt_backup'])
     dt_try_change = int(macro_dict['dt_try_change'])
     dt_time = int(macro_dict['dt_time'])
+    dt_active_ser = int(macro_dict['dt_active_ser'])
+    # Files
+    stat_file = macro_dict['stat_file']
+    file_start = macro_dict['file_start']
+    logfile = macro_dict['logfile']
+    sysfile = macro_dict['sysfile']
+    # Backend
+    dev = macro_dict['dev']
+    logging_level = macro_dict['logging']
 
-    exit()
-    # ### Input parameters for all the amino acids 
+    logging.basicConfig(level=logging_level)
+
+    ## READ stat_file
+    # Input parameters for all the amino acids 
     aa_param_dict = hu.aa_stats_from_file(stat_file)
     aa_type = list(aa_param_dict.keys())
     aa_mass = []
@@ -61,25 +64,42 @@ if __name__=='__main__':
         aa_sigma.append(aa_param_dict[k][2]/10.)
         aa_lambda.append(aa_param_dict[k][3])
 
+    ## READ SYSTEM FILE
+    sys_dicts = hu.system_from_file(sysfile)
+
     ck1d_id = hu.chain_id_from_pdb(filein_ck1d, aa_param_dict)
     ck1d_rel_pos = hu.chain_positions_from_pdb(filein_ck1d, relto='com', chain_mass=[aa_mass[ck1d_id[i]] for i in range(ck1d_length)])   # positions relative to c.o.m. 
 
-
-    def simulate_hps_like():
+    exit()    
+    ### HOOMD3 routine
+    ## INITIALIZATION
+    if dev=='CPU':
         device = hoomd.device.CPU(notice_level=2)
-        sim = hoomd.Simulation(device=device, seed=seed)
-        if start==0:
-            traj = gsd.hoomd.open(file_start)
-            snap = traj[0]
-            snap.configuration.step = 0
-            sim.create_state_from_snapshot(snapshot=snap)
-        elif start==1:
-            sim.create_state_from_gsd(filename=file_start)
-            snap = sim.state.get_snapshot()
-        init_step = sim.initial_timestep
+    elif dev=='GPU':
+        device = hoomd.device.GPU(notice_level=2)
+    sim = hoomd.Simulation(device=device, seed=seed)
+    if start==0:
+        traj = gsd.hoomd.open(file_start)
+        snap = traj[0]
+        snap.configuration.step = 0
+        sim.create_state_from_snapshot(snapshot=snap)
+    elif start==1:
+        sim.create_state_from_gsd(filename=file_start)
+        snap = sim.state.get_snapshot()
+    init_step = sim.initial_timestep
 
-    # ### HOOMD3 routine
-    # ## INITIALIZATION
+
+
+
+# --------------------------- MAIN ------------------------------
+
+if __name__=='__main__':
+    
+    input_file = sys.argv[1]
+    
+
+
+    
     device = hoomd.device.CPU(notice_level=2)
     sim = hoomd.Simulation(device=device, seed=seed)
     if start==0:
