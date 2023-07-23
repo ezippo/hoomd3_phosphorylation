@@ -90,28 +90,6 @@ def simulate_hps_like(infile):
 
 
 
-
-# --------------------------- MAIN ------------------------------
-
-if __name__=='__main__':
-    
-    input_file = sys.argv[1]
-    
-
-
-    
-    device = hoomd.device.CPU(notice_level=2)
-    sim = hoomd.Simulation(device=device, seed=seed)
-    if start==0:
-        traj = gsd.hoomd.open(file_start)
-        snap = traj[0]
-        snap.configuration.step = 0
-        sim.create_state_from_snapshot(snapshot=snap)
-    elif start==1:
-        sim.create_state_from_gsd(filename=file_start)
-        snap = sim.state.get_snapshot()
-    init_step = sim.initial_timestep
-
     rigid_mass = snap.particles.mass[0]
     
     type_id = snap.particles.typeid

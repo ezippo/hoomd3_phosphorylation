@@ -2,6 +2,10 @@
 # -*- coding: utf-8 -*-
 
 import numpy as np
+import gsd.hoomd
+import hoomd
+
+import hps_phosphorylation.hoomd_util as hu
 
 def macros_from_infile(infile):
     '''
@@ -32,38 +36,7 @@ def macros_from_infile(infile):
                     else:
                         macro_dict[line_list[0]] = line_list[1]
     return macro_dict
-
-
-def system_from_file(filename):
-    '''
-    Parameters
-    ----------
-    filename : str
-        name of sysfile.
-
-    Returns
-    -------
-    dict_list : list of dicts
-        [ dict('mol1': ['pdb1', 'N1', 'rigid1', 'active_sites1', 'phospho_sites1']), 
-          dict('mol2': ['pdb2', 'N2', 'rigid2', 'active_sites2', 'phospho_sites2']),
-          ... ]
-    '''
-    dict_list = []
-    with open(filename, 'r') as fid:
-        for line in fid:
-            mol_dict = dict()              
-            if not line.startswith("#") and not line.isspace():
-                line_list = np.array(line.rsplit())
-                mol_dict['mol'] = line_list[0]    # mol name 
-                mol_dict['pdb'] = line_list[1]    # pdb file 
-                mol_dict['N'] = line_list[2]      # N molecules 
-                mol_dict['rigid'] = line_list[3]    # rigid body indexes
-                mol_dict['active_sites'] = line_list[4]    # active site indexes
-                mol_dict['phospho_sites'] = line_list[5]    # phospho site indexes
-                dict_list += [mol_dict]
-                
-    return dict_list
-
+    
 
 def aa_stats_from_file(filename):
     '''
@@ -196,6 +169,157 @@ def chain_positions_from_pdb(filename, relto=None, chain_mass=None, unit='nm'):
     else:
         print("ERROR: relto option can only be None, 'cog' or 'com'. The insterted value is not valid! ")
         exit()
+
+
+def system_from_file(filename):
+    '''
+    Parameters
+    ----------
+    filename : str
+        name of sysfile.
+
+    Returns
+    -------
+    dict_list : list of dicts
+        [ dict('mol1': ['pdb1', 'N1', 'rigid1', 'active_sites1', 'phospho_sites1']), 
+          dict('mol2': ['pdb2', 'N2', 'rigid2', 'active_sites2', 'phospho_sites2']),
+          ... ]
+    '''
+    dict_list = []
+    with open(filename, 'r') as fid:
+        for line in fid:
+            mol_dict = dict()              
+            if not line.startswith("#") and not line.isspace():
+                line_list = np.array(line.rsplit())
+                mol_dict['mol'] = line_list[0]    # mol name 
+                mol_dict['pdb'] = line_list[1]    # pdb file 
+                mol_dict['N'] = line_list[2]      # N molecules 
+                mol_dict['rigid'] = line_list[3]    # rigid body indexes
+                mol_dict['active_sites'] = line_list[4]    # active site indexes
+                mol_dict['phospho_sites'] = line_list[5]    # phospho site indexes
+                dict_list += [mol_dict]
+                
+    return dict_list
+
+
+def read_rigid_id(rigid_str):
+    rigid_list = []
+    if rigid_str=='0':
+        return rigid_list
+    else:
+        rigid_bodies = rigid_str.rsplit(',')
+        for body in rigid_bodies:
+            init_body, end_body = np.array(body.rsplit('-'), dtype=int)
+            rigid_list += [ np.linspace(init_body, end_body, end_body-init_body+1, endpoint=True, dtype=int) ]
+        return rigid_list
+            
+
+def create_init_configuration(syslist, aa_param_dict, box_length):
+    n_mols = len(syslist)
+    n_chains = np.sum([syslist[i]['N'] for i in range(n_mols)])
+    aa_type = list(aa_param_dict.keys())
+    
+    s=gsd.hoomd.Snapshot()
+    
+    s.configuration.dimensions = 3
+    s.configuration.box = [box_length,box_length,box_length,0,0,0] 
+    s.configuration.step = 0
+    s.particles.N = 0
+    s.particles.types = aa_type
+    s.particles.typeid = []
+    s.particles.mass = []
+    s.particles.charge = []
+    s.particles.position = []
+    s.particles.moment_inertia = [] 
+    s.particles.orientation = []
+    s.particles.body = []
+    s.bonds.N = 0
+    s.bonds.types = ['AA_bond']
+    s.bonds.typeid = []
+    s.bonds.group = []
+    
+    K = math.ceil(n_chains**(1/3))
+    spacing = box_length/K
+    x = np.linspace(-box_length/2, box_length/2, K, endpoint=False)
+    positions = list(itertools.product(x, repeat=3))
+    positions = np.array(positions) + [spacing/2, spacing/2, spacing/2]
+    np.random.shuffle(positions)
+    positions = positions[:n_chains, :]
+    
+    n_prev_mol = 0
+    n_prev_res = 0
+    for mol in range(n_mols):
+        mol_dict = syslist[mol]
+#        add_molecule(syslist[mol], aa_param_dict)
+        chain_id, chain_mass, chain_charge, chain_sigma, chain_pos = aa_stats_sequence(mol_dict['pdb'], aa_param_dict)
+        chain_length = len(chain_id)
+        chain_rel_pos = chain_positions_from_pdb(mol_dict['pdb'], relto='com', chain_mass=chain_mass)   # positions relative to c.o.m. 
+
+        if mol_dict['rigid']=='0':
+            mol_pos = []
+            bond_pairs=[]
+            for i_chain in range(mol_dict['N']):
+                mol_pos += list(chain_rel_pos+positions[n_prev_mol+i_chain])
+                bond_pairs += [[n_prev_res + i+i_chain*chain_length, n_prev_res + i+1+i_chain*chain_length] for i in range(chain_length-1)]
+
+            s.particles.N += mol_dict['N']*chain_length
+            s.particles.typeid += mol_dict['N']*chain_id
+            s.particles.mass += mol_dict['N']*chain_mass
+            s.particles.charge += mol_dict['N']*tdp43_charge
+            s.particles.position +=  mol_pos
+            s.particles.moment_inertia += [0,0,0]*chain_length*mol_dict['N']
+            s.particles.orientation += [(1, 0, 0, 0)]*chain_length*mol_dict['N']
+            s.particles.body += [-1]*chain_length*mol_dict['N']
+            
+            s.bonds.N += len(bond_pairs)
+            s.bonds.typeid += [0]*len(bond_pairs)
+            s.bonds.group += bond_pairs
+            
+            n_prev_mol += mol_dict['N']
+            n_prev_res += mol_dict['N']*chain_length
+
+        rigid_id_l = read_rigid_id(mol_dict['rigid'])
+        rigid_list = []
+        for i in range(len(rigid_id_l)):
+            rigid = hoomd.md.constrain.Rigid()
+            rigid.body['R'+str(i)] = {
+                "constituent_types": [aa_type[chain_id[i]] for i in range(chain_length)],
+                "positions": chain_rel_pos,
+                "orientations": [(1,0,0,0)]*chain_length,
+                "charges": chain_charge,
+                "diameters": [0.0]*chain_length
+                }
+            rigid_list += [rigid]
+        
+        s.particles.N = 
+        s.particles.types = aa_type+['R']
+        s.particles.typeid = [len(aa_type)] + tdp43_id*n_tdp43s
+        s.particles.mass = [ck1d_tot_mass] + tdp43_mass*n_tdp43s
+        s.particles.charge = [0] + tdp43_charge*n_tdp43s
+        s.particles.position = [positions[-1]] + positions[:-1]
+        s.particles.moment_inertia = [I_diag[0], I_diag[1], I_diag[2]] + [0,0,0]*tdp43_length*n_tdp43s 
+        s.particles.orientation = [(1, 0, 0, 0)] * (n_tdp43s*tdp43_length+1)
+        s.particles.body = [0] + [-1]*tdp43_length*n_tdp43s
+        
+        rigid.create_bodies(sim.state)
+        
+        
+    s.particles.N = n_tdp43s*tdp43_length + 1
+    s.particles.types = aa_type+['R']
+    s.particles.typeid = [len(aa_type)] + tdp43_id*n_tdp43s
+    s.particles.mass = [ck1d_tot_mass] + tdp43_mass*n_tdp43s
+    s.particles.charge = [0] + tdp43_charge*n_tdp43s
+    s.particles.position = [positions[-1]] + positions[:-1]
+    s.particles.moment_inertia = [I_diag[0], I_diag[1], I_diag[2]] + [0,0,0]*tdp43_length*n_tdp43s 
+    s.particles.orientation = [(1, 0, 0, 0)] * (n_tdp43s*tdp43_length+1)
+    s.particles.body = [0] + [-1]*tdp43_length*n_tdp43s
+    
+    s.bonds.N = len(bond_pairs)
+    s.bonds.types = ['AA_bond']
+    s.bonds.typeid = [0]*len(bond_pairs)
+    s.bonds.group = bond_pairs
+    
+    
 
 
 def protein_moment_inertia(chain_rel_pos, chain_mass, chain_sigma=None):
@@ -404,7 +528,7 @@ def Flist_ashbaugh(sigma, lambda_hps, r_max, r_min=0.4, n_bins=100, epsilon=0.83
     Flist = [ F_ashbaugh_hatch(r, s, l_hps, epsilon) for r in r_range ]
     
     return Flist
-
+x
 
 def compute_distances_pbc(p1, p2, box_size):
     """
