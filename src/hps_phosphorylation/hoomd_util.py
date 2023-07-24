@@ -202,7 +202,7 @@ def system_from_file(filename):
     return dict_list
 
 
-def read_rigid_id(rigid_str):
+def read_rigid_indexes(rigid_str):
     rigid_list = []
     if rigid_str=='0':
         return rigid_list
@@ -210,7 +210,7 @@ def read_rigid_id(rigid_str):
         rigid_bodies = rigid_str.rsplit(',')
         for body in rigid_bodies:
             init_body, end_body = np.array(body.rsplit('-'), dtype=int)
-            rigid_list += [ np.linspace(init_body, end_body, end_body-init_body+1, endpoint=True, dtype=int) ]
+            rigid_list += [ np.linspace(init_body-1, end_body-1, end_body-init_body+1, endpoint=True, dtype=int) ]
         return rigid_list
             
 
@@ -277,20 +277,37 @@ def create_init_configuration(syslist, aa_param_dict, box_length):
             
             n_prev_mol += mol_dict['N']
             n_prev_res += mol_dict['N']*chain_length
-
-        rigid_id_l = read_rigid_id(mol_dict['rigid'])
-        rigid_list = []
-        for i in range(len(rigid_id_l)):
-            rigid = hoomd.md.constrain.Rigid()
-            rigid.body['R'+str(i)] = {
-                "constituent_types": [aa_type[chain_id[i]] for i in range(chain_length)],
-                "positions": chain_rel_pos,
-                "orientations": [(1,0,0,0)]*chain_length,
-                "charges": chain_charge,
-                "diameters": [0.0]*chain_length
-                }
-            rigid_list += [rigid]
         
+        else:
+            rigid_id_l = read_rigid_indexes(mol_dict['rigid'])
+            rigid_list = []
+            for i in range(len(rigid_id_l)):
+                rigid = hoomd.md.constrain.Rigid()
+                rigid.body['R'+str(i)] = {
+                    "constituent_types": [aa_type[chain_id[i]] for i in range(chain_length)],
+                    "positions": chain_rel_pos,
+                    "orientations": [(1,0,0,0)]*chain_length,
+                    "charges": chain_charge,
+                    "diameters": [0.0]*chain_length
+                    }
+                rigid_list += [rigid]
+
+            s.particles.N += mol_dict['N']*chain_length
+            s.particles.typeid += mol_dict['N']*chain_id
+            s.particles.mass += mol_dict['N']*chain_mass
+            s.particles.charge += mol_dict['N']*tdp43_charge
+            s.particles.position +=  mol_pos
+            s.particles.moment_inertia += [0,0,0]*chain_length*mol_dict['N']
+            s.particles.orientation += [(1, 0, 0, 0)]*chain_length*mol_dict['N']
+            s.particles.body += [-1]*chain_length*mol_dict['N']
+            
+            s.bonds.N += len(bond_pairs)
+            s.bonds.typeid += [0]*len(bond_pairs)
+            s.bonds.group += bond_pairs
+            
+            n_prev_mol += mol_dict['N']
+            n_prev_res += mol_dict['N']*chain_length
+
         s.particles.N = 
         s.particles.types = aa_type+['R']
         s.particles.typeid = [len(aa_type)] + tdp43_id*n_tdp43s

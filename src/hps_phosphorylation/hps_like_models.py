@@ -69,8 +69,7 @@ def simulate_hps_like(infile):
     
     ck1d_id = hu.chain_id_from_pdb(filein_ck1d, aa_param_dict)
     ck1d_rel_pos = hu.chain_positions_from_pdb(filein_ck1d, relto='com', chain_mass=[aa_mass[ck1d_id[i]] for i in range(ck1d_length)])   # positions relative to c.o.m. 
-
-    exit()    
+    
     ### HOOMD3 routine
     ## INITIALIZATION
     if dev=='CPU':
