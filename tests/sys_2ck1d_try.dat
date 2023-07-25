@@ -1,2 +1,2 @@
 # mol	pdb				                        N	    rigid		active_sites		phospho_sites
-CK1d	../input_stats/CA_ck1delta.pdb			1	20-100,150-250		147,148,149		0
+CK1d	../input_stats/CA_ck1delta.pdb			2	20-100,150-250		147,148,149		0

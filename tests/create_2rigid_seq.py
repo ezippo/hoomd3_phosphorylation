@@ -17,7 +17,7 @@ box_length=50
 
 stat_file = '../input_stats/stats_module.dat'
 filein_tdp43 = '../input_stats/CA_TDP-43_261truncated.pdb'
-sysfile = 'sys_ck1d_try.dat'
+sysfile = 'sys_2ck1d_try.dat'
 
 def aa_stats_from_file(filename):
     '''
@@ -144,7 +144,6 @@ def chain_positions_from_pdb(filename, relto=None, chain_mass=None, unit='nm'):
     elif relto=='com':
         reshaped_mass = np.reshape( chain_mass, (len(chain_mass),1) )
         chain_com_pos = np.sum(chain_pos * reshaped_mass, axis=0) / np.sum(chain_mass)
-        print((chain_pos-chain_com_pos).shape)
         return chain_pos - chain_com_pos
     else:
         print("ERROR: relto option can only be None, 'cog' or 'com'. The insterted value is not valid! ")
@@ -279,7 +278,7 @@ if __name__=='__main__':
         reshaped_rigid_mass = np.reshape( rigid_mass, (len(rigid_mass),1) )
         rigid_com_rel_pos = np.sum(rigid_rel_pos * reshaped_rigid_mass, axis=0) / np.sum(rigid_mass)       # c.o.m. relative to the center of the molecule
         rigid_rel_pos = rigid_rel_pos-rigid_com_rel_pos             # positions of monomers of the rigid body relative to the c.o.m.
-        position_rigid_bodies += [rigid_com_rel_pos+positions[0]]   # position of c.o.m.
+        position_rigid_bodies += [rigid_com_rel_pos]   
         I = protein_moment_inertia(rigid_rel_pos, rigid_mass)
         I_diag, E_vec = np.linalg.eig(I)
         moment_inertia_rigid_bodies += [[I_diag[0], I_diag[1], I_diag[2]]]
@@ -299,7 +298,7 @@ if __name__=='__main__':
             mass_free_bodies += [chain_mass[i] for i in free_ind]
             charge_free_bodies += [chain_charge[i] for i in free_ind]
             free_rel_pos = chain_rel_pos[free_ind]                      # positions of the free monomers relative to the center of the molecule
-            position_free_bodies += list(free_rel_pos+positions[0])     # positions of the free monomers
+            position_free_bodies += list(free_rel_pos)     
             length_free_bodies += [len(free_ind)]
             bonds_free_rigid += [ [n_rigids+np.sum(length_free_bodies)-1, r+1] ]
             if free_ind[0]!=0:
@@ -314,9 +313,19 @@ if __name__=='__main__':
         mass_free_bodies += [chain_mass[i] for i in free_ind]
         charge_free_bodies += [chain_charge[i] for i in free_ind]
         free_rel_pos = chain_rel_pos[free_ind]                      # positions of the free monomers relative to the center of the molecule
-        position_free_bodies += list(free_rel_pos+positions[0])     # positions of the free monomers
+        position_free_bodies += list(free_rel_pos)  
         length_free_bodies += [len(free_ind)]
         bonds_free_rigid += [ [n_rigids+np.sum(length_free_bodies[:-1]), -r-1] ]
+    else:
+        length_free_bodies += [0]
+
+    length_free_total = np.sum(length_free_bodies)
+
+    n_mol_chains = int(mol_dict['N'])
+    all_positions_rel = position_rigid_bodies+position_free_bodies
+    all_positions = []
+    for nm in range(n_mol_chains):
+        all_positions += list( np.array(all_positions_rel) + positions[nm] )
 
     ## set first snapshot
     s=gsd.hoomd.Frame()
@@ -324,37 +333,45 @@ if __name__=='__main__':
     s.configuration.box = [box_length,box_length,box_length,0,0,0] 
     s.configuration.step = 0
     # particles
-    s.particles.N = n_rigids + np.sum(length_free_bodies)
+    s.particles.N = n_mol_chains*(n_rigids + length_free_total )
     s.particles.types = aa_type + types_rigid_bodies
-    s.particles.typeid = typeid_rigid_bodies + typeid_free_bodies
-    s.particles.mass = mass_rigid_bodies + mass_free_bodies
-    s.particles.charge = [0]*n_rigids + charge_free_bodies
-    s.particles.position = position_rigid_bodies + position_free_bodies
-    s.particles.moment_inertia = moment_inertia_rigid_bodies + [[0,0,0]]*np.sum(length_free_bodies)
-    s.particles.orientation = [(1, 0, 0, 0)]*(n_rigids+np.sum(length_free_bodies))
-    s.particles.body = [r for r in range(n_rigids)] + [-1]*np.sum(length_free_bodies)
+    s.particles.typeid = n_mol_chains*(typeid_rigid_bodies + typeid_free_bodies)
+    s.particles.mass = n_mol_chains*(mass_rigid_bodies + mass_free_bodies)
+    s.particles.charge = n_mol_chains*([0]*n_rigids + charge_free_bodies)
+    s.particles.position = all_positions
+    s.particles.moment_inertia = n_mol_chains*(moment_inertia_rigid_bodies + [[0,0,0]]*length_free_total )
+    s.particles.orientation = n_mol_chains*([(1, 0, 0, 0)]*(n_rigids+length_free_total) )
     # bonds
     s.bonds.N = 0
     s.bonds.types = ['AA_bond']
     s.bonds.typeid = []
     s.bonds.group = []
+
     sim = hoomd.Simulation(device=hoomd.device.CPU())
     sim.create_state_from_snapshot(s)
     rigid.create_bodies(sim.state)
-
     integrator = hoomd.md.Integrator(dt=0.01, integrate_rotational_dof=True)
     integrator.rigid = rigid
     sim.operations.integrator = integrator
     sim.run(0)
-    hoomd.write.GSD.write(state=sim.state, filename='ck1d_try_start.gsd', mode='wb')
+    hoomd.write.GSD.write(state=sim.state, filename='2ck1d_try_start.gsd', mode='wb')
+    
+    s1 = gsd.hoomd.open(name='2ck1d_try_start.gsd', mode='r+')[0]
+    
+    ## indexing
+    print(length_free_bodies)
+    R_ind_l = np.where(np.isin(s1.particles.typeid,[len(aa_type)+i for i in range(n_rigids)]))[0]
+    rig_ind_l = [ list(np.where(s1.particles.body==R_ind_l[i])[0]) for i in range(len(R_ind_l)) ]
+    free_ind_l = []
+    reordered_ind = []
+    for nc in range(n_mol_chains):
+        reordered_ind += [i+nc*(n_rigids+length_free_total) for i in range(n_rigids+length_free_bodies[0])]
+        for r in range(n_rigids):
+            reordered_ind += rig_ind_l[r+nc*n_rigids][1:]
+            reordered_ind += [nc*(n_rigids+length_free_total) +i+n_rigids+np.sum(length_free_bodies[:r+1]) for i in range(length_free_bodies[r+1])]
+    exit(s1.particles.N)
 
     ## bonds
-    bond_pairs = []
-    n_prev_res = 0
-    for length in length_free_bodies:
-        bond_pairs += [ [n_rigids+n_prev_res+i, n_rigids+n_prev_res+i+1 ] for i in range(length-1)]
-        n_prev_res += int(length)
-    # add bonds free-rigid
     for b in range(len(bonds_free_rigid)):
         if bonds_free_rigid[b][1]<0:
             r = -bonds_free_rigid[b][1] 
@@ -366,14 +383,13 @@ if __name__=='__main__':
             bonds_free_rigid[b][1] = n_rigids + np.sum(length_free_bodies) + int(length) 
     bond_pairs += bonds_free_rigid
 
-    s1 = gsd.hoomd.open(name='ck1d_try_start.gsd', mode='r+')[0]
+    
     #s = gsd.hoomd.open('ck1d_try_start.gsd', 'rb')[0]
     s1.bonds.N = len(bond_pairs) 
     s1.bonds.typeid = [0]*len(bond_pairs)
     s1.bonds.group = bond_pairs
     
-    print(s1.particles.body)
-    with gsd.hoomd.open(name='ck1d_try_start.gsd', mode='w') as fout:
+    with gsd.hoomd.open(name='2ck1d_try_start.gsd', mode='w') as fout:
         fout.append(s1)
         fout.close()
  
