@@ -307,7 +307,7 @@ if __name__=='__main__':
         n_prev_res += len(free_ind) + len(rigid_ind)
         
     # free monomers in the final tail
-    if rigid_ind[-1]<len(chain_id):
+    if rigid_ind[-1]<len(chain_id)-1:
         free_ind = [i for i in range(n_prev_res, len(chain_id))]
         typeid_free_bodies += [chain_id[i] for i in free_ind]
         mass_free_bodies += [chain_mass[i] for i in free_ind]
@@ -362,29 +362,30 @@ if __name__=='__main__':
     print(length_free_bodies)
     R_ind_l = np.where(np.isin(s1.particles.typeid,[len(aa_type)+i for i in range(n_rigids)]))[0]
     rig_ind_l = [ list(np.where(s1.particles.body==R_ind_l[i])[0]) for i in range(len(R_ind_l)) ]
-    free_ind_l = []
     reordered_ind = []
     for nc in range(n_mol_chains):
         reordered_ind += [i+nc*(n_rigids+length_free_total) for i in range(n_rigids+length_free_bodies[0])]
         for r in range(n_rigids):
             reordered_ind += rig_ind_l[r+nc*n_rigids][1:]
             reordered_ind += [nc*(n_rigids+length_free_total) +i+n_rigids+np.sum(length_free_bodies[:r+1]) for i in range(length_free_bodies[r+1])]
-    exit(s1.particles.N)
 
     ## bonds
-    for b in range(len(bonds_free_rigid)):
-        if bonds_free_rigid[b][1]<0:
-            r = -bonds_free_rigid[b][1] 
-            length = np.sum([ len(rigid.body['R'+str(r_ind)]['charges']) for r_ind in range(1,r+1) ])
-            bonds_free_rigid[b][1] = n_rigids + np.sum(length_free_bodies) + length -1
-        else:
-            r = bonds_free_rigid[b][1] 
-            length = np.sum([ len(rigid.body['R'+str(r_ind)]['charges']) for r_ind in range(1,r) ])
-            bonds_free_rigid[b][1] = n_rigids + np.sum(length_free_bodies) + int(length) 
-    bond_pairs += bonds_free_rigid
+    bond_pairs = []
+    for nc in range(n_mol_chains):
+        for ifree in range(len(length_free_bodies)):
+            bond_pairs += [[nc*(n_rigids+length_free_total) +n_rigids+np.sum(length_free_bodies[:ifree], dtype=int)+i , nc*(n_rigids+length_free_total) +n_rigids+np.sum(length_free_bodies[:ifree], dtype=int)+i+1 ] for i in range(length_free_bodies[ifree]-1)]
 
+    bonds_free_rigid = []
+    for irig in range(n_rigids):
+        start_tmp = rigid_ind_l[irig][0]
+        if start_tmp>0:
+            bonds_free_rigid += [[reordered_ind[start_tmp+n_rigids-1], reordered_ind[start_tmp+n_rigids]]]
+        end_tmp = rigid_ind_l[irig][-1]
+        if end_tmp < len(chain_id)-1:
+            bonds_free_rigid += [[reordered_ind[end_tmp+n_rigids], reordered_ind[end_tmp+n_rigids+1]]]
+
+    bond_pairs += bonds_free_rigid
     
-    #s = gsd.hoomd.open('ck1d_try_start.gsd', 'rb')[0]
     s1.bonds.N = len(bond_pairs) 
     s1.bonds.typeid = [0]*len(bond_pairs)
     s1.bonds.group = bond_pairs
