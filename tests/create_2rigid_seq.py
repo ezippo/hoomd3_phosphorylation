@@ -263,7 +263,6 @@ if __name__=='__main__':
     charge_free_bodies = []
     position_free_bodies = []
     length_free_bodies = []
-    bonds_free_rigid = []
     n_prev_res=0
     for r in range(n_rigids):
         # rigid body and previous free body indexes
@@ -300,10 +299,7 @@ if __name__=='__main__':
             free_rel_pos = chain_rel_pos[free_ind]                      # positions of the free monomers relative to the center of the molecule
             position_free_bodies += list(free_rel_pos)     
             length_free_bodies += [len(free_ind)]
-            bonds_free_rigid += [ [n_rigids+np.sum(length_free_bodies)-1, r+1] ]
-            if free_ind[0]!=0:
-                bonds_free_rigid += [ [n_rigids+np.sum(length_free_bodies[:-1]), -r] ]
-                 
+                  
         n_prev_res += len(free_ind) + len(rigid_ind)
         
     # free monomers in the final tail
@@ -315,7 +311,6 @@ if __name__=='__main__':
         free_rel_pos = chain_rel_pos[free_ind]                      # positions of the free monomers relative to the center of the molecule
         position_free_bodies += list(free_rel_pos)  
         length_free_bodies += [len(free_ind)]
-        bonds_free_rigid += [ [n_rigids+np.sum(length_free_bodies[:-1]), -r-1] ]
     else:
         length_free_bodies += [0]
 
