@@ -454,6 +454,8 @@ def create_init_configuration(syslist, aa_param_dict, box_length):
             n_prev_res += (n_rigids+length_free_total)*n_mol_chains
 
         n_prev_mol += n_mol_chains
+    
+    bond_pairs_tot = s.bonds.group
 
     ### BUILD RIGID BODIES
     sim = hoomd.Simulation(device=hoomd.device.CPU())
@@ -492,12 +494,12 @@ def create_init_configuration(syslist, aa_param_dict, box_length):
         else:
             n_prev_res += chain_lengths_list[mol]*int(mol_dict['N'])
 
-    bond_pairs += bonds_free_rigid
+    bond_pairs_tot += bonds_free_rigid
 
-    s1.bonds.N += len(bonds_free_rigid) 
-    s1.bonds.typeid += [0]*len(bonds_free_rigid)
-    s1.bonds.group += bonds_free_rigid
-    
+    s1.bonds.N = len(bond_pairs_tot) 
+    s1.bonds.typeid = [0]*len(bond_pairs_tot)
+    s1.bonds.group = bond_pairs_tot
+    print(s1.particles.N)
     with gsd.hoomd.open(name='2complete_try_start.gsd', mode='w') as fout:
         fout.append(s1)
         fout.close()
