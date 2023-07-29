@@ -491,6 +491,74 @@ def compute_center(pos):
     return center_pos
 
 
+def rigid_dict_from_syslist(syslist):
+    n_mols = len(syslist)
+    mol_keys = [syslist[mol]['mol'] for mol in range(n_mols)]
+    rigid_dict = dict()
+    for mol in range(n_mols):
+        key = mol_keys[mol]
+        mol_dict = syslist[mol]
+        chain_length = 0
+        with open(mol_dict['pdb'], 'r') as fid:
+            for line in fid:
+                if line[0]=='A':
+                    chain_length += 1
+
+        if mol_dict['rigid']=='0':
+            rigid_dict[key] = {
+                                "n_rigids": 0, 
+                                "rigid_lengths": [], 
+                                "free_lengths": [chain_length],
+                                "n_chains": int(mol_dict['N'])
+                                }
+        else:
+            rigid_ind_l = read_rigid_indexes(mol_dict['rigid'])
+            n_rigids = len(rigid_ind_l)
+            rigid_lengths = [ len(rigid_ind_l[nr]) for nr in range(n_rigids) ]
+            free_lengths = [ rigid_ind_l[0][0] ]
+            for nr in range(n_rigids-1):
+                free_lengths += [ rigid_ind_l[nr+1][0] - rigid_ind_l[nr][-1] -1 ]
+            free_lengths += [ chain_length-1 - rigid_ind_l[-1][-1] ]
+            rigid_dict[key] = {
+                                "n_rigids": n_rigids, 
+                                "rigid_lengths": rigid_lengths, 
+                                "free_lengths": free_lengths,
+                                "n_chains": int(mol_dict['N'])
+                                }
+    return rigid_dict
+
+
+def reordering_index(syslist):
+    n_mols = len(syslist)
+    mol_keys = [syslist[mol]['mol'] for mol in range(n_mols)]
+    rigid_dict = rigid_dict_from_syslist(syslist)
+
+    reordered_list = []
+    n_prev_freeR = 0
+    n_prev_rig = np.sum([ rigid_dict[key]['n_rigids']*rigid_dict[key]['n_chains'] for key in mol_keys ])
+    n_prev_rig += np.sum([ np.sum(rigid_dict[key]['free_lengths'])*rigid_dict[key]['n_chains'] for key in mol_keys ])
+    for mol in range(n_mols):
+        key = mol_keys[mol]
+        if rigid_dict[key]['n_rigids']==0:
+            tmp_length = rigid_dict[key]['free_lengths']
+            for ch in range(rigid_dict[key]['n_chains']):
+                reordered_list += [n_prev_freeR+i for i in range(tmp_length[0])]
+                n_prev_freeR += tmp_length[0]
+        else:
+            tmp_length_free = rigid_dict[key]['free_lengths']
+            tmp_length_rig = rigid_dict[key]['rigid_lengths']
+            tmp_reord_list = []
+            for ch in range(rigid_dict[key]['n_chains']):
+                tmp_reord_list += [n_prev_freeR+i for i in range(rigid_dict[key]['n_rigids']+tmp_length_free[0])]
+                n_prev_freeR += rigid_dict[key]['n_rigids']+tmp_length_free[0]
+                for nr in range(rigid_dict[key]['n_rigids']):
+                    tmp_reord_list += [n_prev_rig+i for i in range(tmp_length_rig[nr])]
+                    tmp_reord_list += [n_prev_freeR+i for i in range(tmp_length_free[nr+1])]
+                    n_prev_freeR += tmp_length_free[nr+1]
+                    n_prev_rig += tmp_length_rig[nr]
+            reordered_list += tmp_reord_list
+
+    return reordered_list
 
 if __name__=='__main__':
     a = system_from_file('/Users/zippoema/Desktop/phd/md_simulations/git_hub/input_stats/sys_ck1d_tdp43.dat')
