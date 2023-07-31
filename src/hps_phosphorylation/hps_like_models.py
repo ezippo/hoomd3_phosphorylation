@@ -91,12 +91,11 @@ def create_init_configuration(syslist, aa_param_dict, box_length):
             charge_free_bodies = []
             position_free_bodies = []
             length_free_bodies = []
-            bonds_free_rigid = []
-            n_prev_res=0
+            n_res=0
             for r in range(n_rigids):
                 # rigid body and previous free body indexes
                 rigid_ind = rigid_ind_l[r]
-                free_ind = [i for i in range(n_prev_res, rigid_ind[0])]
+                free_ind = [i for i in range(n_res, rigid_ind[0])]
                 # rigid body properties
                 types_rigid_bodies += ['R'+str(r+1)]                        # type R1, R2, R3 ...
                 typeid_rigid_bodies += [len(aa_type)+len(types_rigid_bodies)-1]  
@@ -106,10 +105,10 @@ def create_init_configuration(syslist, aa_param_dict, box_length):
                 reshaped_rigid_mass = np.reshape( rigid_mass, (len(rigid_mass),1) )
                 rigid_com_rel_pos = np.sum(rigid_rel_pos * reshaped_rigid_mass, axis=0) / np.sum(rigid_mass)       # c.o.m. relative to the center of the molecule
                 rigid_rel_pos = rigid_rel_pos-rigid_com_rel_pos             # positions of monomers of the rigid body relative to the c.o.m.
-                position_rigid_bodies += [rigid_com_rel_pos+positions[0]]   # position of c.o.m.
+                position_rigid_bodies += [rigid_com_rel_pos]   
                 I = protein_moment_inertia(rigid_rel_pos, rigid_mass)
                 I_diag, E_vec = np.linalg.eig(I)
-                moment_inertia_rigid_bodies += [I_diag[0], I_diag[1], I_diag[2]]
+                moment_inertia_rigid_bodies += [[I_diag[0], I_diag[1], I_diag[2]]]
                 # create rigid body object 
                 rigid.body['R'+str(r+1)] = {
                     "constituent_types": [aa_type[chain_id[i]] for i in rigid_ind],
@@ -126,27 +125,91 @@ def create_init_configuration(syslist, aa_param_dict, box_length):
                     mass_free_bodies += [chain_mass[i] for i in free_ind]
                     charge_free_bodies += [chain_charge[i] for i in free_ind]
                     free_rel_pos = chain_rel_pos[free_ind]                      # positions of the free monomers relative to the center of the molecule
-                    position_free_bodies += list(free_rel_pos+positions[0])     # positions of the free monomers
+                    position_free_bodies += list(free_rel_pos)     
                     length_free_bodies += [len(free_ind)]
-                    bonds_free_rigid += [ [n_rigids+np.sum(length_free_bodies)-1, r+1] ]
-                    if free_ind[0]!=0:
-                        bonds_free_rigid += [ [n_rigids+np.sum(length_free_bodies[:-1]), -r] ]
-                    
-                n_prev_res += len(free_ind) + len(rigid_ind)
-        
+                        
+                n_res += len(free_ind) + len(rigid_ind)
+                
             # free monomers in the final tail
-            if rigid_ind[-1]<len(chain_id):
-                free_ind = [i for i in range(n_prev_res, len(chain_id))]
+            if rigid_ind[-1]<len(chain_id)-1:
+                free_ind = [i for i in range(n_res, len(chain_id))]
                 typeid_free_bodies += [chain_id[i] for i in free_ind]
                 mass_free_bodies += [chain_mass[i] for i in free_ind]
                 charge_free_bodies += [chain_charge[i] for i in free_ind]
                 free_rel_pos = chain_rel_pos[free_ind]                      # positions of the free monomers relative to the center of the molecule
-                position_free_bodies += list(free_rel_pos+positions[0])     # positions of the free monomers
+                position_free_bodies += list(free_rel_pos)  
                 length_free_bodies += [len(free_ind)]
-                bonds_free_rigid += [ [n_rigids+np.sum(length_free_bodies[:-1]), -r-1] ]
+            else:
+                length_free_bodies += [0]
 
+            length_free_total = np.sum(length_free_bodies)
 
+            n_mol_chains = int(mol_dict['N'])
+            all_positions_rel = position_rigid_bodies+position_free_bodies
+            all_positions = []
+            for nm in range(n_mol_chains):
+                all_positions += list( np.array(all_positions_rel) + positions[n_prev_mol+nm] )
 
+            ## set snapshot
+            # particles
+            s.particles.N += n_mol_chains*(n_rigids + length_free_total )
+            s.particles.types += types_rigid_bodies
+            s.particles.typeid += n_mol_chains*(typeid_rigid_bodies + typeid_free_bodies)
+            s.particles.mass += n_mol_chains*(mass_rigid_bodies + mass_free_bodies)
+            s.particles.charge += n_mol_chains*([0]*n_rigids + charge_free_bodies)
+            s.particles.position += all_positions
+            s.particles.moment_inertia += n_mol_chains*(moment_inertia_rigid_bodies + [[0,0,0]]*length_free_total )
+            s.particles.orientation += n_mol_chains*([(1, 0, 0, 0)]*(n_rigids+length_free_total) )
+
+            sim = hoomd.Simulation(device=hoomd.device.CPU())
+            sim.create_state_from_snapshot(s)
+            rigid.create_bodies(sim.state)
+            integrator = hoomd.md.Integrator(dt=0.01, integrate_rotational_dof=True)
+            integrator.rigid = rigid
+            sim.operations.integrator = integrator
+            sim.run(0)
+            hoomd.write.GSD.write(state=sim.state, filename='2ck1d_try_start.gsd', mode='wb')
+            
+            s1 = gsd.hoomd.open(name='2ck1d_try_start.gsd', mode='r+')[0]
+            
+            ## indexing
+            print(length_free_bodies)
+            R_ind_l = np.where(np.isin(s1.particles.typeid,[len(aa_type)+i for i in range(n_rigids)]))[0]
+            rig_ind_l = [ list(np.where(s1.particles.body==R_ind_l[i])[0]) for i in range(len(R_ind_l)) ]
+            reordered_ind = []
+            for nc in range(n_mol_chains):
+                reordered_ind += [i+nc*(n_rigids+length_free_total) for i in range(n_rigids+length_free_bodies[0])]
+                for r in range(n_rigids):
+                    reordered_ind += rig_ind_l[r+nc*n_rigids][1:]
+                    reordered_ind += [nc*(n_rigids+length_free_total) +i+n_rigids+np.sum(length_free_bodies[:r+1]) for i in range(length_free_bodies[r+1])]
+
+            ## bonds
+            bond_pairs = []
+            for nc in range(n_mol_chains):
+                for ifree in range(len(length_free_bodies)):
+                    bond_pairs += [[nc*(n_rigids+length_free_total) +n_rigids+np.sum(length_free_bodies[:ifree], dtype=int)+i , nc*(n_rigids+length_free_total) +n_rigids+np.sum(length_free_bodies[:ifree], dtype=int)+i+1 ] for i in range(length_free_bodies[ifree]-1)]
+
+            bonds_free_rigid = []
+            for irig in range(n_rigids):
+                start_tmp = rigid_ind_l[irig][0]
+                if start_tmp>0:
+                    bonds_free_rigid += [[reordered_ind[start_tmp+n_rigids-1], reordered_ind[start_tmp+n_rigids]]]
+                end_tmp = rigid_ind_l[irig][-1]
+                if end_tmp < len(chain_id)-1:
+                    bonds_free_rigid += [[reordered_ind[end_tmp+n_rigids], reordered_ind[end_tmp+n_rigids+1]]]
+
+            bond_pairs += bonds_free_rigid
+            
+            s1.bonds.N = len(bond_pairs) 
+            s1.bonds.typeid = [0]*len(bond_pairs)
+            s1.bonds.group = bond_pairs
+            
+            with gsd.hoomd.open(name='2ck1d_try_start.gsd', mode='w') as fout:
+                fout.append(s1)
+                fout.close()
+                
+            n_prev_mol += n_mol_chains
+            n_prev_res += n_mol_chains*chain_length
 
 
 
