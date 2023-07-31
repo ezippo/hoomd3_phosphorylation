@@ -10,6 +10,84 @@ import logging
 
 import hps_phosphorylation.hoomd_util as hu
 
+def yukawa_pair_potential(particle_types, cell, aa_type, aa_charge, model=='HPS', rescaled=0):
+    yukawa = hoomd.md.pair.Yukawa(nlist=cell)
+    inter_types = aa_type
+    if rescaled!=0:
+        inter_types += [f'{name}_r' for name in aa_type]
+    for i in range(len(particle_types)):
+        atom1 = particle_types[i]
+        for j in range(i,len(particle_types)):
+            atom2 = particle_types[j]
+            if atom1 in inter_types and atom2 in inter_types:
+                if model=="CALVADOS2":
+                    yukawa.params[(atom1,atom2)] = dict(epsilon=aa_charge[i]*aa_charge[j]*1.782, kappa=1.275)
+                    yukawa.r_cut[(atom1,atom2)] = 4.0
+                else:
+                    yukawa.params[(atom1,atom2)] = dict(epsilon=aa_charge[i]*aa_charge[j]*1.73136, kappa=1.0)
+                    yukawa.r_cut[(atom1,atom2)] = 3.5
+            else:
+                yukawa.params[(atom1,atom2)] = dict(epsilon=0, kappa=1.0)
+                yukawa.r_cut[(atom1,atom2)] = 0.0
+
+    return yukawa
+
+
+def ashbaugh_hatch_pair_potential(particle_types, cell, aa_type, aa_sigma, aa_lambda, model=='HPS', rescaled=0):
+    ashbaugh_table = hoomd.md.pair.Table(nlist=cell)
+    cation_type = ["ARG", "LYS", "ARG_r", "LYS_r"]
+    pi_type = ["PHE", "TRP", "TYR", "PHE_r", "TRP_r", "TYR_r"]
+    r_factor = 1 - rescaled/100
+    rigid_types = [f'{name}_r' for name in aa_type]
+    for i in range(len(particle_types)):
+        atom1 = particle_types[i]
+        for j in range(i,len(particle_types)):
+            atom2 = particle_types[j]
+            if atom1 in aa_type and atom2 in aa_type:               # interactions IDP-IDP
+                Ulist = np.array(hu.Ulist_ashbaugh(sigma=[aa_sigma[i], aa_sigma[j]], 
+                                        lambda_hps=[aa_lambda[i], aa_lambda[j]],
+                                        r_max=2.0, r_min=0.2, n_bins=100000, epsilon=0.8368) )
+                Flist = np.array(hu.Flist_ashbaugh(sigma=[aa_sigma[i], aa_sigma[j]], 
+                                        lambda_hps=[aa_lambda[i], aa_lambda[j]],
+                                        r_max=2.0, r_min=0.2, n_bins=100000, epsilon=0.8368) )
+                if model=="HPS_cp":
+                    # cation-pi interaction
+                    if (atom1 in cation_type and atom2 in pi_type) or (atom2 in cation_type and atom1 in pi_type):
+                        Ulist += np.array(hu.Ulist_ashbaugh(sigma=[aa_sigma[i], aa_sigma[j]], 
+                                                lambda_hps=1.0,
+                                                r_max=2.0, r_min=0.2, n_bins=100000, epsilon=3.138) )
+                        Flist += np.array(hu.Flist_ashbaugh(sigma=[aa_sigma[i], aa_sigma[j]], 
+                                                lambda_hps=1.0,
+                                                r_max=2.0, r_min=0.2, n_bins=100000, epsilon=3.138) )
+                ashbaugh_table.params[(atom1, atom2)] = dict(r_min=0.2, U=Ulist, F=Flist)
+                ashbaugh_table.r_cut[(atom1, atom2)] = 2.0            
+                logging.debug(f"Interactions: ashbaugh-hatch {atom1}-{atom2}")
+            elif atom1 in aa_type and atom2 in aa_type_r:               # interactions IDP-globular
+                Ulist = np.array(hu.Ulist_ashbaugh(sigma=[aa_sigma[i], aa_sigma[j]], 
+                                        lambda_hps=[r_factor*aa_lambda[i], r_factor*aa_lambda[j]],          # Scale down lamba by rescaled% for interactions with rigid body particles 
+                                        r_max=2.0, r_min=0.2, n_bins=100000, epsilon=0.8368) )
+                Flist = np.array(hu.Flist_ashbaugh(sigma=[aa_sigma[i], aa_sigma[j]], 
+                                        lambda_hps=[r_factor*aa_lambda[i], r_factor*aa_lambda[j]],
+                                        r_max=2.0, r_min=0.2, n_bins=100000, epsilon=0.8368) )
+                if model=="HPS_cp":
+                    # cation-pi interaction
+                    if (atom1 in cation_type and atom2 in pi_type) or (atom2 in cation_type and atom1 in pi_type):
+                        Ulist += np.array(hu.Ulist_ashbaugh(sigma=[aa_sigma[i], aa_sigma[j]], 
+                                                lambda_hps=1.0,
+                                                r_max=2.0, r_min=0.2, n_bins=100000, epsilon=r_factor*3.138) )         # Scale down epsilon by rescaled% for interactions with rigid body particles 
+                        Flist += np.array(hu.Flist_ashbaugh(sigma=[aa_sigma[i], aa_sigma[j]], 
+                                                lambda_hps=1.0,
+                                                r_max=2.0, r_min=0.2, n_bins=100000, epsilon=r_factor*3.138) )
+                ashbaugh_table.params[(atom1, atom2)] = dict(r_min=0.2, U=Ulist, F=Flist)
+                ashbaugh_table.r_cut[(atom1, atom2)] = 2.0            
+                logging.debug(f"Interactions: ashbaugh-hatch {atom1}-{atom2}")          
+            else:                                       # interactions IDP-globular or with R particles
+                ashbaugh_table.params[(atom1, atom2)] = dict(r_min=0., U=[0], F=[0])
+                ashbaugh_table.r_cut[(atom1, atom2)] = 0 
+                logging.debug(f"Interactions: ashbaugh-hatch {atom1}-{atom2}")      
+            
+    return ashbaugh_table
+
 
 def create_init_configuration(filename, syslist, aa_param_dict, box_length, rescaled=False):
     n_mols = len(syslist)
@@ -98,7 +176,7 @@ def create_init_configuration(filename, syslist, aa_param_dict, box_length, resc
             charge_free_bodies = []
             position_free_bodies = []
             length_free_bodies = []
-            body_list = [len(s.particles.types)-len(aa_type)+r for r in range(n_rigids)]
+            #body_list = [len(s.particles.types)-len(aa_type)+r for r in range(n_rigids)]
             count_res=0
             # loop on the rigid bodies of the same molecule
             for r in range(n_rigids):
@@ -157,7 +235,7 @@ def create_init_configuration(filename, syslist, aa_param_dict, box_length, resc
                 free_rel_pos = chain_rel_pos[free_ind]                      # positions of the free monomers relative to the center of the molecule
                 position_free_bodies += list(free_rel_pos)  
                 length_free_bodies += [len(free_ind)]
-                body_list += [-1]*len(free_ind)
+            #    body_list += [-1]*len(free_ind)
             else:
                 length_free_bodies += [0]
 
@@ -301,6 +379,8 @@ def simulate_hps_like(infile, model='HPS', rescale=0):
         aa_charge.append(aa_param_dict[k][1])
         aa_sigma.append(aa_param_dict[k][2]/10.)
         aa_lambda.append(aa_param_dict[k][3])
+    if rescaled!=0:
+        aa_type_r = [f"{name}_r" for name in aa_type]
 
     ## READ SYSTEM FILE
     syslist = hu.system_from_file(sysfile)
@@ -367,48 +447,25 @@ def simulate_hps_like(infile, model='HPS', rescale=0):
     activeCK1d_serials = [30800+147, 30800+148, 30800+149]     # [171, 204, 301, 302, 303, 304, 305]
     
         
-    # # groups
+    # groups
     all_group = hoomd.filter.All()
     moving_group = hoomd.filter.Rigid(("center", "free"))
     
-    # ## PAIR INTERACTIONS
+    ## PAIR INTERACTIONS
     cell = hoomd.md.nlist.Cell(buffer=0.4, exclusions=('bond', 'body'))
     
-    # # bonds
+    # bonds
     harmonic = hoomd.md.bond.Harmonic()
-    harmonic.params['AA_bond'] = dict(k=8360, r0=0.381)
+    if model=="CALVADOS2":
+        harmonic.params['AA_bond'] = dict(k=8033, r0=0.381)
+    else:
+        harmonic.params['AA_bond'] = dict(k=8360, r0=0.381)
     
-    # # electrostatics forces
-    yukawa = hoomd.md.pair.Yukawa(nlist=cell)
-    for i in range(len(aa_type)):
-        atom1 = aa_type[i]
-        for j in range(i,len(aa_type)):
-            atom2 = aa_type[j]
-            yukawa.params[(atom1,atom2)] = dict(epsilon=aa_charge[i]*aa_charge[j]*1.73136, kappa=1.0)
-            yukawa.r_cut[(atom1,atom2)] = 3.5
-        yukawa.params[(atom1,'R')] = dict(epsilon=0, kappa=1.0)
-        yukawa.r_cut[(atom1,'R')] = 0.0
-    yukawa.params[('R','R')] = dict(epsilon=0, kappa=1.0)
-    yukawa.r_cut[('R','R')] = 0.0
+    # electrostatics forces
+    yukawa = yukawa_pair_potential(snap.particles.types, cell, aa_type, aa_charge, model, rescaled)
     
-    # # nonbonded: ashbaugh-hatch potential
-    ashbaugh_table = hoomd.md.pair.Table(nlist=cell)
-    for i in range(len(aa_type)):
-        atom1 = aa_type[i]
-        for j in range(i,len(aa_type)):
-            atom2 = aa_type[j]
-            Ulist = hu.Ulist_ashbaugh(sigma=[aa_sigma[i], aa_sigma[j]], 
-                                      lambda_hps=[aa_lambda[i], aa_lambda[j]],
-                                      r_max=2.0, r_min=0.2, n_bins=100000, epsilon=0.8368)
-            Flist = hu.Flist_ashbaugh(sigma=[aa_sigma[i], aa_sigma[j]], 
-                                      lambda_hps=[aa_lambda[i], aa_lambda[j]],
-                                      r_max=2.0, r_min=0.2, n_bins=100000, epsilon=0.8368)
-            ashbaugh_table.params[(atom1, atom2)] = dict(r_min=0.2, U=Ulist, F=Flist)
-            ashbaugh_table.r_cut[(atom1, atom2)] = 2.0            
-        ashbaugh_table.params[(atom1, 'R')] = dict(r_min=0., U=[0], F=[0])
-        ashbaugh_table.r_cut[(atom1, 'R')] = 0 
-    ashbaugh_table.params[('R', 'R')] = dict(r_min=0., U=[0], F=[0])
-    ashbaugh_table.r_cut[('R', 'R')] = 0 
+    # nonbonded: ashbaugh-hatch potential
+    ashbaugh_table = ashbaugh_hatch_pair_potential(snap.particles.types, cell, aa_type, aa_sigma, aa_lambda, model, rescaled)
     
     # ## INTEGRATOR
     integrator = hoomd.md.Integrator(production_dt, integrate_rotational_dof=True)        
@@ -417,8 +474,13 @@ def simulate_hps_like(infile, model='HPS', rescale=0):
     for i,name in enumerate(aa_type):
         langevin.gamma[name] = aa_mass[i]/1000.0
         langevin.gamma_r[name] = (0.0, 0.0, 0.0)
-    langevin.gamma['R'] = rigid_mass/1000.0
-    langevin.gamma_r['R'] = (1.0, 1.0, 1.0)
+    if rescaled!=0:
+        for i,name in enumerate(aa_type_r):
+            langevin.gamma[name] = aa_mass[i]/1000.0
+            langevin.gamma_r[name] = (0.0, 0.0, 0.0)
+    for i in range(prev_rigids):
+        langevin.gamma['R'+str(i+1)] = rigid_masses_l[i]/1000.0
+        langevin.gamma_r['R'+str(i+1] = (4.0, 4.0, 4.0)
     # constraints : rigid body
     integrator.rigid = rigid
     # forces 
