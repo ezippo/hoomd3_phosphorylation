@@ -250,7 +250,7 @@ def create_init_configuration(filename, syslist, aa_param_dict, box_length, resc
 
     
 
-def simulate_hps_like(infile):
+def simulate_hps_like(infile, model='HPS', rescale=0):
     # UNITS: distance -> nm   (!!!positions and sigma in files are in agstrom!!!)
     #        mass -> amu
     #        energy -> kJ/mol
@@ -304,11 +304,48 @@ def simulate_hps_like(infile):
         aa_lambda.append(aa_param_dict[k][3])
 
     ## READ SYSTEM FILE
-    sys_dicts = hu.system_from_file(sysfile)
+    syslist = hu.system_from_file(sysfile)
+    n_mols = len(syslist)
     
-    ck1d_id = hu.chain_id_from_pdb(filein_ck1d, aa_param_dict)
-    ck1d_rel_pos = hu.chain_positions_from_pdb(filein_ck1d, relto='com', chain_mass=[aa_mass[ck1d_id[i]] for i in range(ck1d_length)])   # positions relative to c.o.m. 
-    
+    # rigid bodies
+    prev_rigids = 0
+    rigid = hoomd.md.constrain.Rigid()
+    rigid_masses_l = []
+    for mol in range(n_mols):
+        mol_dict = syslist[mol]
+        if mol_dict['rigid']!='0':
+            chain_id = hu.chain_id_from_pdb(mol_dict['pdb'], aa_param_dict)
+            chain_length = len(chian_id)
+            chain_mass = [aa_mass[chain_id[i]] for i in range(chain_length)]
+            chain_charge = [aa_charge[chain_id[i]] for i in range(chain_length)]
+            chain_rel_pos = hu.chain_positions_from_pdb(mol_dict['pdb'], relto='com', chain_mass=chain_mass)   # positions relative to c.o.m. 
+            rigid_ind_l = read_rigid_indexes(mol_dict['rigid'])
+            for nr in range(len(rigid_ind_l)):
+                rigid_mass = [chain_mass[i] for i in rigid_ind_l[nr]]
+                rigid_masses_l += [np.sum(rigid_mass)]
+                rigid_rel_pos = chain_rel_pos[rigid_ind_l[nr]] 
+                reshaped_rigid_mass = np.reshape( rigid_mass, (len(rigid_mass),1) )
+                rigid_com_rel_pos = np.sum(rigid_rel_pos * reshaped_rigid_mass, axis=0) / np.sum(rigid_mass)       # c.o.m. relative to the center of the molecule
+                rigid_rel_pos = rigid_rel_pos-rigid_com_rel_pos             # positions of monomers of the rigid body relative to the c.o.m.
+                prev_rigids += 1
+                rig_name = 'R' + str( nr + prev_rigids )
+                if rescaled==0:
+                    rigid.body[rig_name] = {
+                        "constituent_types": [aa_type[chain_id[i]] for i in rigid_ind_l[nr]],
+                        "positions": rigid_rel_pos,
+                        "orientations": [(1,0,0,0)]*len(rigid_ind_l[nr]),
+                        "charges": [ chain_charge[i] for i in rigid_ind_l[nr] ],
+                        "diameters": [0.0]*len(rigid_ind_l[nr])
+                        }
+                else:
+                    rigid.body[rig_name] = {
+                        "constituent_types": [aa_type_r[chain_id[i]] for i in rigid_ind],
+                        "positions": rigid_rel_pos,
+                        "orientations": [(1,0,0,0)]*len(rigid_ind_l[nr]),
+                        "charges": [ chain_charge[i] for i in rigid_ind_l[nr] ],
+                        "diameters": [0.0]*len(rigid_ind_l[nr])
+                        }
+      
     ### HOOMD3 routine
     ## INITIALIZATION
     if dev=='CPU':
@@ -326,24 +363,11 @@ def simulate_hps_like(infile):
         snap = sim.state.get_snapshot()
     init_step = sim.initial_timestep
 
-
-
-    rigid_mass = snap.particles.mass[0]
-    
     type_id = snap.particles.typeid
     ser_serials = np.where(np.isin(type_id[:155],[15,20]))[0]
     activeCK1d_serials = [30800+147, 30800+148, 30800+149]     # [171, 204, 301, 302, 303, 304, 305]
     
-    # # rigid body
-    rigid = hoomd.md.constrain.Rigid()
-    rigid.body['R'] = {
-        "constituent_types": [aa_type[ck1d_id[i]] for i in range(ck1d_length)],
-        "positions": ck1d_rel_pos,
-        "orientations": [(1,0,0,0)]*ck1d_length,
-        "charges": [aa_charge[ck1d_id[i]] for i in range(ck1d_length)],
-        "diameters": [0.0]*ck1d_length
-        }
-    
+        
     # # groups
     all_group = hoomd.filter.All()
     moving_group = hoomd.filter.Rigid(("center", "free"))
