@@ -390,15 +390,18 @@ def simulate_hps_like(infile, model='HPS', rescale=0):
     prev_rigids = 0
     rigid = hoomd.md.constrain.Rigid()
     rigid_masses_l = []
+    chain_lengths_l = []
+    n_rigids_l = []
     for mol in range(n_mols):
         mol_dict = syslist[mol]
         if mol_dict['rigid']!='0':
             chain_id = hu.chain_id_from_pdb(mol_dict['pdb'], aa_param_dict)
-            chain_length = len(chian_id)
-            chain_mass = [aa_mass[chain_id[i]] for i in range(chain_length)]
-            chain_charge = [aa_charge[chain_id[i]] for i in range(chain_length)]
+            chain_lengths_l += [len(chain_id)]
+            chain_mass = [aa_mass[chain_id[i]] for i in range(chain_lengths_l)]
+            chain_charge = [aa_charge[chain_id[i]] for i in range(chain_lengths_l)]
             chain_rel_pos = hu.chain_positions_from_pdb(mol_dict['pdb'], relto='com', chain_mass=chain_mass)   # positions relative to c.o.m. 
             rigid_ind_l = read_rigid_indexes(mol_dict['rigid'])
+            n_rigids_l += [len(rigid_ind_l)]
             for nr in range(len(rigid_ind_l)):
                 rigid_mass = [chain_mass[i] for i in rigid_ind_l[nr]]
                 rigid_masses_l += [np.sum(rigid_mass)]
@@ -442,10 +445,21 @@ def simulate_hps_like(infile, model='HPS', rescale=0):
         snap = sim.state.get_snapshot()
     init_step = sim.initial_timestep
 
-    type_id = snap.particles.typeid
-    ser_serials = np.where(np.isin(type_id[:155],[15,20]))[0]
-    activeCK1d_serials = [30800+147, 30800+148, 30800+149]     # [171, 204, 301, 302, 303, 304, 305]
-    
+    reordered_list = reordering_index(syslist)
+    # phosphosite
+    ser_serials = []
+    for mol in range(n_mols):
+        mol_dict = syslist[mol]
+        init_index = np.sum(n_rigids_l[:mol])+np.sum(chain_lengths_l[:mol])
+        if mol_dict['phospho_sites']=='SER':
+            end_index = init_index + chain_lengths_l[mol]
+            type_list = [type_id[i] for i in reordered_list[init_index:end_index]]
+            tmp_serials = init_index+np.where(np.isin(type_list,[15,20]))[0]
+        else:
+            tmp_serials = init_index+np.array( map(int, mol_dict['phospho_sites'].rsplit(',')) )
+        ser_serials += [ reordered_list[i] for i in tmp_serials ] )
+            
+    # active site
         
     # groups
     all_group = hoomd.filter.All()
