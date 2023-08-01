@@ -10,11 +10,21 @@ import hps_phosphorylation.hps_like_models as hps
 if __name__=='__main__':
     parser = argparse.ArgumentParser(description='MD simulation in HOOMD3 using HPS-like models')
     group_mode = parser.add_mutually_exclusive_group(required=True)
-    group_mode.add_argument('-c', '--create_conf', type=str, help='The code will run in the create_initial_configuration mode. The argument of this flag must be the name of the output configuration file. Give sysfile.dat as inputfile.')
-    parser.add_argument('-m', '--model', required=True, type=str, choices=['HPS', 'HPS_cp', 'CALVADOS2'], help='The code will run in simulation mode. The argument of this flag must be the name of the coarse-grained model to use in the simulation.')
-    parser.add_argument('-i','--infile', required=True, type=str, help='In mode simulation: input file with simulation parameters, logging file name and parameters, system file name. In mode create_initial_configuration: sysfile.dat .')
-    parser.add_argument('-r', '--rescale', type=float, help='Scale down rigid body interaction by X% . To use also in create_initial_configuration mode to incude the rescaled rigid body types (value of argmuent not important in this case).')
+    group_mode.add_argument('-c', '--create_conf', action='store_true', help='The code will run in the create_initial_configuration mode.')
+    group_mode.add_argument('-m', '--model', type=str, choices=['HPS', 'HPS_cp', 'CALVADOS2'], help='The code will run in simulation mode. The argument of this flag must be the name of the coarse-grained model to use in the simulation.')
+    parser.add_argument('-i','--infile', required=True, type=str, help='Input file with simulation parameters, logging file name and parameters, system file name.')
+    parser.add_argument('-r', '--rescale', default=0, type=float, help='Scale down rigid body interaction by X percentage. To use also in create_initial_configuration mode to incude the rescaled rigid body types (value of argmuent not important in this case).')
 
     args = parser.parse_args()
-    print(args.infile)  
-    
+
+    ## READ INPUT FILE
+    macro_dict = hu.macros_from_infile(args.infile)
+    aa_param_dict = hu.aa_stats_from_file(macro_dict['stat_file'])
+    syslist = hu.system_from_file(macro_dict['sysfile'])
+
+    # create_initial_configuration mode
+    if args.create_conf:
+        hps.create_init_configuration(filename=macro_dict['logfile']+'_start.gsd', syslist=syslist, aa_param_dict=aa_param_dict, box_length=float( macro_dict['box_length'] ), rescale=bool(args.rescale))
+    # simulation mode
+    else:
+        hps.simulate_hps_like(macro_dict=macro_dict, aa_param_dict=aa_param_dict, syslist=syslist, model=args.model, rescale=args.rescale)

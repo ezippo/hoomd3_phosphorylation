@@ -8,9 +8,8 @@ import hoomd
 import gsd, gsd.hoomd
 import logging
 
-#import hps_phosphorylation.hoomd_util as hu
-import hoomd_util as hu
-import phosphorylation
+import hps_phosphorylation.hoomd_util as hu
+import hps_phosphorylation.phosphorylation as phospho
 
 ### -------------------------------------- PAIR POTENTIALS DEFINITION -------------------------------------------------------------
 ## YUKAWA: elecrostatic interaction with Debey-Huckel screening
@@ -333,7 +332,7 @@ def create_init_configuration(filename, syslist, aa_param_dict, box_length, resc
 
 ### --------------------------------- SIMULATION MODE ------------------------------------------------
 
-def simulate_hps_like(infile, model='HPS', rescale=0):
+def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0):
     # UNITS: distance -> nm   (!!!positions and sigma in files are in agstrom!!!)
     #        mass -> amu
     #        energy -> kJ/mol
@@ -342,8 +341,6 @@ def simulate_hps_like(infile, model='HPS', rescale=0):
     time_start = time.time()
     
     ### MACROs from file
-    ## READ INPUT FILE
-    macro_dict = hu.macros_from_infile(infile)
     # Simulation parameters
     production_dt = float(macro_dict['production_dt'])        # Time step for production run in picoseconds
     production_steps = int(macro_dict['production_steps'])                       # Total number of steps 
@@ -373,9 +370,7 @@ def simulate_hps_like(infile, model='HPS', rescale=0):
     # initialize contacts list
     contacts = []
 
-    ## READ stat_file
     # Input parameters for all the amino acids 
-    aa_param_dict = hu.aa_stats_from_file(stat_file)
     aa_type = list(aa_param_dict.keys())
     aa_mass = []
     aa_charge = []
@@ -388,12 +383,9 @@ def simulate_hps_like(infile, model='HPS', rescale=0):
         aa_lambda.append(aa_param_dict[k][3])
     if rescale!=0:
         aa_type_r = [f"{name}_r" for name in aa_type]
-
-    ## READ SYSTEM FILE
-    syslist = hu.system_from_file(sysfile)
-    n_mols = len(syslist)
     
     # rigid bodies
+    n_mols = len(syslist)
     prev_rigids = 0
     rigid = hoomd.md.constrain.Rigid()
     rigid_masses_l = []
@@ -497,17 +489,14 @@ def simulate_hps_like(infile, model='HPS', rescale=0):
     
     ## PAIR INTERACTIONS
     cell = hoomd.md.nlist.Cell(buffer=0.4, exclusions=('bond', 'body'))
-    
     # bonds
     harmonic = hoomd.md.bond.Harmonic()
     if model=="CALVADOS2":
         harmonic.params['AA_bond'] = dict(k=8033, r0=0.381)
     else:
         harmonic.params['AA_bond'] = dict(k=8360, r0=0.381)
-    
     # electrostatics forces
     yukawa = yukawa_pair_potential(snap.particles.types, cell, aa_type, aa_charge, model, rescale)
-    
     # nonbonded: ashbaugh-hatch potential
     ashbaugh_table = ashbaugh_hatch_pair_potential(snap.particles.types, cell, aa_type, aa_sigma, aa_lambda, model, rescale)
     
@@ -567,11 +556,11 @@ def simulate_hps_like(infile, model='HPS', rescale=0):
     changeser_actions_l = []
     changeser_updaters_l = []
     for i,active_serial in enumerate(active_serials_l):
-        changeser_actions_l += [ phosphorylation.ChangeSerine(active_serials=active_serial, ser_serials=ser_serials, forces=[yukawa, ashbaugh_table], 
+        changeser_actions_l += [ phospho.ChangeSerine(active_serials=active_serial, ser_serials=ser_serials, forces=[yukawa, ashbaugh_table], 
                                     glb_contacts=contacts, temp=temp, Dmu=Dmu, box_size=box_length, contact_dist=contact_dist) ]
         changeser_updaters_l += [ hoomd.update.CustomUpdater(action=changeser_actions_l[-1], trigger=hoomd.trigger.Periodic(dt_try_change, phase=i)) ]
 
-    contacts_action = phosphorylation.ContactsBackUp(glb_contacts=contacts, logfile=logfile)
+    contacts_action = phospho.ContactsBackUp(glb_contacts=contacts, logfile=logfile)
     contacts_bckp_writer = hoomd.write.CustomWriter(action=contacts_action, trigger=hoomd.trigger.Periodic(int(dt_backup/2)))
     
     # ## SET SIMULATION OPERATIONS

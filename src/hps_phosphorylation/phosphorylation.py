@@ -1,8 +1,7 @@
 import numpy as np
 import logging
 
-#import hps_phosphorylation.hoomd_util as hu
-import hoomd_util as hu
+import hps_phosphorylation.hoomd_util as hu
 import hoomd
 
 def metropolis_boltzmann(dU, dmu, beta=2.494338):
