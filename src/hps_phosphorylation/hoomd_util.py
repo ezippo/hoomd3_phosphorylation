@@ -1,11 +1,25 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+import time
 import numpy as np
 import gsd.hoomd
 import hoomd
 
-import hps_phosphorylation.hoomd_util as hu
+#import hps_phosphorylation.hoomd_util as hu
+import hoomd_util as hu
+
+class PrintTimestep(hoomd.custom.Action):
+
+    def __init__(self, t_start, production_steps):
+        self._t_start = t_start
+        self._production_steps = production_steps
+
+    def act(self, timestep):
+        current_time = time.time()
+        current_time = current_time - self._t_start
+        print(f"Elapsed time {current_time} | Step {timestep}/{self._production_steps} " )
+
 
 def macros_from_infile(infile):
     '''
@@ -164,7 +178,6 @@ def chain_positions_from_pdb(filename, relto=None, chain_mass=None, unit='nm'):
     elif relto=='com':
         reshaped_mass = np.reshape( chain_mass, (len(chain_mass),1) )
         chain_com_pos = np.sum(chain_pos * reshaped_mass, axis=0) / np.sum(chain_mass)
-        print((chain_pos-chain_com_pos).shape)
         return chain_pos - chain_com_pos
     else:
         print("ERROR: relto option can only be None, 'cog' or 'com'. The insterted value is not valid! ")
@@ -420,7 +433,7 @@ def Flist_ashbaugh(sigma, lambda_hps, r_max, r_min=0.4, n_bins=100, epsilon=0.83
     Flist = [ F_ashbaugh_hatch(r, s, l_hps, epsilon) for r in r_range ]
     
     return Flist
-x
+
 
 def compute_distances_pbc(p1, p2, box_size):
     """

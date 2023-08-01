@@ -1,23 +1,29 @@
 # Simulation parameters
 production_dt   0.01       # Time step for production run in picoseconds
-production_steps 	2000	    # Total number of steps 
+production_steps 	6000	    # Total number of steps 
 production_T    300         # Temperature for production run in Kelvin
-box_lenght  200
+box_length  200
 start   0	   # 0 -> new simulation, 1 -> restart
 contact_dist  100.0
 Dmu  -48.0     # mu_adp - mu_atp in cells
 seed    10218
 
-# Files
-stat_file   input_stats/stats_module.dat
-filein_enzyme input_stats/CA_ck1delta.pdb input_stats/CA_ck1delta_full.pdb
-file_start  input_stats/ck1d-rigid-rescaled_multi-tdp43_start.gsd
-#file_start  sim_0/therm0_ck1d-rigid_multi-tdp43_end.gsd
-logfile	    sim_0_hps-cp-r/sim0_ck1d-rigid-rescaled_multi-tdp43
-
 # Logging time interval
 dt_dump 200
-dt_log  5000000
-dt_backup   10000000
+dt_log  2000
+dt_backup   2000
 dt_try_change    200 
 dt_time 1000
+dt_active_ser 2000
+
+# Files
+stat_file   ../../input_stats/stats_module.dat
+file_start  ../../tests/test_try_start.gsd
+logfile	    ../../tests/sim0_try/sim0_test_try
+sysfile    ../../tests/sys_test_try.dat
+
+# Backend
+logging   WARNING
+dev     CPU
+
+

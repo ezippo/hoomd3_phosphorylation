@@ -4,16 +4,20 @@
 import sys,os
 import time
 import numpy as np
-#import hoomd
+import hoomd
 import gsd, gsd.hoomd
 import logging
 
-import hps_phosphorylation.hoomd_util as hu
+#import hps_phosphorylation.hoomd_util as hu
+import hoomd_util as hu
+import phosphorylation
 
-def yukawa_pair_potential(particle_types, cell, aa_type, aa_charge, model=='HPS', rescaled=0):
+### -------------------------------------- PAIR POTENTIALS DEFINITION -------------------------------------------------------------
+## YUKAWA: elecrostatic interaction with Debey-Huckel screening
+def yukawa_pair_potential(particle_types, cell, aa_type, aa_charge, model='HPS', rescale=0):
     yukawa = hoomd.md.pair.Yukawa(nlist=cell)
     inter_types = aa_type
-    if rescaled!=0:
+    if rescale!=0:
         inter_types += [f'{name}_r' for name in aa_type]
     for i in range(len(particle_types)):
         atom1 = particle_types[i]
@@ -32,12 +36,12 @@ def yukawa_pair_potential(particle_types, cell, aa_type, aa_charge, model=='HPS'
 
     return yukawa
 
-
-def ashbaugh_hatch_pair_potential(particle_types, cell, aa_type, aa_sigma, aa_lambda, model=='HPS', rescaled=0):
+## ASHBAUGH-HATCH: Van der Waals interactions + hydrophobicity screening
+def ashbaugh_hatch_pair_potential(particle_types, cell, aa_type, aa_sigma, aa_lambda, model='HPS', rescale=0):
     ashbaugh_table = hoomd.md.pair.Table(nlist=cell)
     cation_type = ["ARG", "LYS", "ARG_r", "LYS_r"]
     pi_type = ["PHE", "TRP", "TYR", "PHE_r", "TRP_r", "TYR_r"]
-    r_factor = 1 - rescaled/100
+    r_factor = 1 - rescale/100
     rigid_types = [f'{name}_r' for name in aa_type]
     for i in range(len(particle_types)):
         atom1 = particle_types[i]
@@ -62,7 +66,7 @@ def ashbaugh_hatch_pair_potential(particle_types, cell, aa_type, aa_sigma, aa_la
                 ashbaugh_table.params[(atom1, atom2)] = dict(r_min=0.2, U=Ulist, F=Flist)
                 ashbaugh_table.r_cut[(atom1, atom2)] = 2.0            
                 logging.debug(f"Interactions: ashbaugh-hatch {atom1}-{atom2}")
-            elif atom1 in aa_type and atom2 in aa_type_r:               # interactions IDP-globular
+            elif atom1 in aa_type and atom2 in rigid_types:               # interactions IDP-globular
                 Ulist = np.array(hu.Ulist_ashbaugh(sigma=[aa_sigma[i], aa_sigma[j]], 
                                         lambda_hps=[r_factor*aa_lambda[i], r_factor*aa_lambda[j]],          # Scale down lamba by rescaled% for interactions with rigid body particles 
                                         r_max=2.0, r_min=0.2, n_bins=100000, epsilon=0.8368) )
@@ -88,12 +92,13 @@ def ashbaugh_hatch_pair_potential(particle_types, cell, aa_type, aa_sigma, aa_la
             
     return ashbaugh_table
 
+### --------------------------------- CREATE INITIAL CONFIGURATION MODE ------------------------------------------------
 
-def create_init_configuration(filename, syslist, aa_param_dict, box_length, rescaled=False):
+def create_init_configuration(filename, syslist, aa_param_dict, box_length, rescale=False):
     n_mols = len(syslist)
     n_chains = np.sum([int(syslist[i]['N']) for i in range(n_mols)])
     aa_type = list(aa_param_dict.keys())
-    if rescaled:
+    if rescale:
         aa_type_r = [f'{aa_name}_r' for aa_name in aa_type]
     
     ## initialize first snapshot
@@ -197,7 +202,7 @@ def create_init_configuration(filename, syslist, aa_param_dict, box_length, resc
                 I_diag, E_vec = np.linalg.eig(I)
                 moment_inertia_rigid_bodies += [[I_diag[0], I_diag[1], I_diag[2]]]
                 # create rigid body object
-                if rescaled:
+                if rescale:
                     rigid.body[types_rigid_bodies[-1]] = {
                         "constituent_types": [aa_type_r[chain_id[i]] for i in rigid_ind],
                         "positions": rigid_rel_pos,
@@ -276,7 +281,7 @@ def create_init_configuration(filename, syslist, aa_param_dict, box_length, resc
     bond_pairs_tot = s.bonds.group
 
     ### BUILD RIGID BODIES
-    if rescaled:
+    if rescale:
         s.particles.types += aa_type_r
     
     sim = hoomd.Simulation(device=hoomd.device.CPU())
@@ -325,7 +330,8 @@ def create_init_configuration(filename, syslist, aa_param_dict, box_length, resc
         fout.append(s1)
         fout.close()
 
-    
+
+### --------------------------------- SIMULATION MODE ------------------------------------------------
 
 def simulate_hps_like(infile, model='HPS', rescale=0):
     # UNITS: distance -> nm   (!!!positions and sigma in files are in agstrom!!!)
@@ -343,7 +349,7 @@ def simulate_hps_like(infile, model='HPS', rescale=0):
     production_steps = int(macro_dict['production_steps'])                       # Total number of steps 
     production_T = float(macro_dict['production_T'])                      # Temperature for production run in Kelvin
     temp = production_T * 0.00831446                  # Temp is RT [kJ/mol]
-    box_length = int(macro_dict['box_lenght'])
+    box_length = int(macro_dict['box_length'])
     start = int(macro_dict['start'])	                           # 0 -> new simulation, 1 -> restart
     contact_dist = float(macro_dict['contact_dist'])
     Dmu = float(macro_dict['Dmu'])
@@ -363,8 +369,9 @@ def simulate_hps_like(infile, model='HPS', rescale=0):
     # Backend
     dev = macro_dict['dev']
     logging_level = macro_dict['logging']
-
     logging.basicConfig(level=logging_level)
+    # initialize contacts list
+    contacts = []
 
     ## READ stat_file
     # Input parameters for all the amino acids 
@@ -379,7 +386,7 @@ def simulate_hps_like(infile, model='HPS', rescale=0):
         aa_charge.append(aa_param_dict[k][1])
         aa_sigma.append(aa_param_dict[k][2]/10.)
         aa_lambda.append(aa_param_dict[k][3])
-    if rescaled!=0:
+    if rescale!=0:
         aa_type_r = [f"{name}_r" for name in aa_type]
 
     ## READ SYSTEM FILE
@@ -394,15 +401,15 @@ def simulate_hps_like(infile, model='HPS', rescale=0):
     n_rigids_l = []
     for mol in range(n_mols):
         mol_dict = syslist[mol]
+        chain_id = hu.chain_id_from_pdb(mol_dict['pdb'], aa_param_dict)
+        chain_lengths_l += [len(chain_id)]
         if mol_dict['rigid']!='0':
-            chain_id = hu.chain_id_from_pdb(mol_dict['pdb'], aa_param_dict)
-            chain_lengths_l += [len(chain_id)]
-            chain_mass = [aa_mass[chain_id[i]] for i in range(chain_lengths_l)]
-            chain_charge = [aa_charge[chain_id[i]] for i in range(chain_lengths_l)]
+            chain_mass = [aa_mass[chain_id[i]] for i in range(chain_lengths_l[-1])]
+            chain_charge = [aa_charge[chain_id[i]] for i in range(chain_lengths_l[-1])]
             chain_rel_pos = hu.chain_positions_from_pdb(mol_dict['pdb'], relto='com', chain_mass=chain_mass)   # positions relative to c.o.m. 
-            rigid_ind_l = read_rigid_indexes(mol_dict['rigid'])
+            rigid_ind_l = hu.read_rigid_indexes(mol_dict['rigid'])
             n_rigids_l += [len(rigid_ind_l)]
-            for nr in range(len(rigid_ind_l)):
+            for nr in range(n_rigids_l[-1]):
                 rigid_mass = [chain_mass[i] for i in rigid_ind_l[nr]]
                 rigid_masses_l += [np.sum(rigid_mass)]
                 rigid_rel_pos = chain_rel_pos[rigid_ind_l[nr]] 
@@ -410,8 +417,8 @@ def simulate_hps_like(infile, model='HPS', rescale=0):
                 rigid_com_rel_pos = np.sum(rigid_rel_pos * reshaped_rigid_mass, axis=0) / np.sum(rigid_mass)       # c.o.m. relative to the center of the molecule
                 rigid_rel_pos = rigid_rel_pos-rigid_com_rel_pos             # positions of monomers of the rigid body relative to the c.o.m.
                 prev_rigids += 1
-                rig_name = 'R' + str( nr + prev_rigids )
-                if rescaled==0:
+                rig_name = 'R' + str( prev_rigids )
+                if rescale==0:
                     rigid.body[rig_name] = {
                         "constituent_types": [aa_type[chain_id[i]] for i in rigid_ind_l[nr]],
                         "positions": rigid_rel_pos,
@@ -421,13 +428,15 @@ def simulate_hps_like(infile, model='HPS', rescale=0):
                         }
                 else:
                     rigid.body[rig_name] = {
-                        "constituent_types": [aa_type_r[chain_id[i]] for i in rigid_ind],
+                        "constituent_types": [aa_type_r[chain_id[i]] for i in rigid_ind_l[nr]],
                         "positions": rigid_rel_pos,
                         "orientations": [(1,0,0,0)]*len(rigid_ind_l[nr]),
                         "charges": [ chain_charge[i] for i in rigid_ind_l[nr] ],
                         "diameters": [0.0]*len(rigid_ind_l[nr])
                         }
-      
+        else:
+            n_rigids_l += [0]
+
     ### HOOMD3 routine
     ## INITIALIZATION
     if dev=='CPU':
@@ -445,22 +454,43 @@ def simulate_hps_like(infile, model='HPS', rescale=0):
         snap = sim.state.get_snapshot()
     init_step = sim.initial_timestep
 
-    reordered_list = reordering_index(syslist)
+    # indexing and types
+    type_id = snap.particles.typeid
+    reordered_list = hu.reordering_index(syslist)
+
     # phosphosite
     ser_serials = []
+    prev_res = 0 
     for mol in range(n_mols):
         mol_dict = syslist[mol]
-        init_index = np.sum(n_rigids_l[:mol])+np.sum(chain_lengths_l[:mol])
+        n_mol_chains = int(mol_dict['N'])
+        end_index = int( n_mol_chains*(n_rigids_l[mol] + chain_lengths_l[mol]) )
         if mol_dict['phospho_sites']=='SER':
-            end_index = init_index + chain_lengths_l[mol]
-            type_list = [type_id[i] for i in reordered_list[init_index:end_index]]
-            tmp_serials = init_index+np.where(np.isin(type_list,[15,20]))[0]
+            type_list = [type_id[i] for i in reordered_list[prev_res:prev_res+end_index]]
+            tmp_serials = prev_res+np.where(np.isin(type_list,[15,20]))[0]
+        elif mol_dict['phospho_sites']!='0':
+            tmp_list = list(map(int, mol_dict['phospho_sites'].rsplit(',')))
+            tmp_serials = []
+            for nc in range(n_mol_chains):
+                tmp_serials += list( np.array( tmp_list ) + prev_res + nc*(n_rigids_l[mol]+chain_lengths_l[mol]) )
         else:
-            tmp_serials = init_index+np.array( map(int, mol_dict['phospho_sites'].rsplit(',')) )
-        ser_serials += [ reordered_list[i] for i in tmp_serials ] )
-            
+            tmp_serials = []
+        ser_serials += [ reordered_list[i] for i in tmp_serials ] 
+        prev_res += end_index
+
     # active site
-        
+    active_serials_l = []
+    prev_res = 0 
+    for mol in range(n_mols):
+        mol_dict = syslist[mol]
+        n_mol_chains = int(mol_dict['N'])
+        if mol_dict['active_sites']!='0':
+            tmp_list = list(map(int, mol_dict['active_sites'].rsplit(',')))
+            for nc in range(n_mol_chains):
+                tmp_serials = list( np.array( tmp_list ) + prev_res + nc*(n_rigids_l[mol]+chain_lengths_l[mol]) )
+                active_serials_l += [[ reordered_list[i] for i in tmp_serials ]]
+        prev_res += int( n_mol_chains*(n_rigids_l[mol] + chain_lengths_l[mol]) )
+
     # groups
     all_group = hoomd.filter.All()
     moving_group = hoomd.filter.Rigid(("center", "free"))
@@ -476,10 +506,10 @@ def simulate_hps_like(infile, model='HPS', rescale=0):
         harmonic.params['AA_bond'] = dict(k=8360, r0=0.381)
     
     # electrostatics forces
-    yukawa = yukawa_pair_potential(snap.particles.types, cell, aa_type, aa_charge, model, rescaled)
+    yukawa = yukawa_pair_potential(snap.particles.types, cell, aa_type, aa_charge, model, rescale)
     
     # nonbonded: ashbaugh-hatch potential
-    ashbaugh_table = ashbaugh_hatch_pair_potential(snap.particles.types, cell, aa_type, aa_sigma, aa_lambda, model, rescaled)
+    ashbaugh_table = ashbaugh_hatch_pair_potential(snap.particles.types, cell, aa_type, aa_sigma, aa_lambda, model, rescale)
     
     # ## INTEGRATOR
     integrator = hoomd.md.Integrator(production_dt, integrate_rotational_dof=True)        
@@ -488,13 +518,13 @@ def simulate_hps_like(infile, model='HPS', rescale=0):
     for i,name in enumerate(aa_type):
         langevin.gamma[name] = aa_mass[i]/1000.0
         langevin.gamma_r[name] = (0.0, 0.0, 0.0)
-    if rescaled!=0:
+    if rescale!=0:
         for i,name in enumerate(aa_type_r):
             langevin.gamma[name] = aa_mass[i]/1000.0
             langevin.gamma_r[name] = (0.0, 0.0, 0.0)
     for i in range(prev_rigids):
         langevin.gamma['R'+str(i+1)] = rigid_masses_l[i]/1000.0
-        langevin.gamma_r['R'+str(i+1] = (4.0, 4.0, 4.0)
+        langevin.gamma_r['R'+str(i+1)] = (4.0, 4.0, 4.0)
     # constraints : rigid body
     integrator.rigid = rigid
     # forces 
@@ -531,14 +561,17 @@ def simulate_hps_like(infile, model='HPS', rescale=0):
     # # Custom action
     print(f"Initial time: {time.time()-time_start}")
     time_start = time.time()
-    time_action = PrintTimestep(time_start)
+    time_action = hu.PrintTimestep(time_start, production_steps)
     time_writer = hoomd.write.CustomWriter(action=time_action, trigger=hoomd.trigger.Periodic(dt_time))
     
-    changeser_action = ChangeSerine(active_serials=activeCK1d_serials, ser_serials=ser_serials, forces=[yukawa, ashbaugh_table], 
-                                    glb_contacts=contacts, temp=temp, Dmu=Dmu, box_size=box_lenght, contact_dist=contact_dist)
-    changeser_updater = hoomd.update.CustomUpdater(action=changeser_action, trigger=hoomd.trigger.Periodic(dt_try_change))
+    changeser_actions_l = []
+    changeser_updaters_l = []
+    for i,active_serial in enumerate(active_serials_l):
+        changeser_actions_l += [ phosphorylation.ChangeSerine(active_serials=active_serial, ser_serials=ser_serials, forces=[yukawa, ashbaugh_table], 
+                                    glb_contacts=contacts, temp=temp, Dmu=Dmu, box_size=box_length, contact_dist=contact_dist) ]
+        changeser_updaters_l += [ hoomd.update.CustomUpdater(action=changeser_actions_l[-1], trigger=hoomd.trigger.Periodic(dt_try_change, phase=i)) ]
 
-    contacts_action = ContactsBackUp(glb_contacts=contacts)
+    contacts_action = phosphorylation.ContactsBackUp(glb_contacts=contacts, logfile=logfile)
     contacts_bckp_writer = hoomd.write.CustomWriter(action=contacts_action, trigger=hoomd.trigger.Periodic(int(dt_backup/2)))
     
     # ## SET SIMULATION OPERATIONS
@@ -550,11 +583,12 @@ def simulate_hps_like(infile, model='HPS', rescale=0):
     sim.operations.writers.append(backup2_gsd)
     sim.operations.writers.append(tq_gsd)
     sim.operations += time_writer
-    sim.operations += changeser_updater
+    for i in range(len(active_serials_l)):
+        sim.operations += changeser_updaters_l[i]
     sim.operations += contacts_bckp_writer
 
     sim.run(production_steps-init_step)
-#    sim.run(production_steps)
+
     if start==1 and len(contacts)!=0:
         cont_prev = np.loadtxt(logfile+"_contacts.txt")
         if len(cont_prev)!=0:
@@ -567,3 +601,9 @@ def simulate_hps_like(infile, model='HPS', rescale=0):
     
     hoomd.write.GSD.write(state=sim.state, filename=logfile+'_end.gsd')
     
+
+if __name__=='__main__':
+    infile = '../../input0.in'
+    simulate_hps_like(infile, model='HPS', rescale=0)
+
+

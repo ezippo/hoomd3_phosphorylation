@@ -1,6 +1,9 @@
 import numpy as np
-import hps_phosphorylation.hoomd_util as hu
+import logging
 
+#import hps_phosphorylation.hoomd_util as hu
+import hoomd_util as hu
+import hoomd
 
 def metropolis_boltzmann(dU, dmu, beta=2.494338):
     x = np.random.rand()
@@ -10,15 +13,6 @@ def metropolis_boltzmann(dU, dmu, beta=2.494338):
         return False
 
 # ### CUSTOM ACTIONS
-class PrintTimestep(hoomd.custom.Action):
-
-    def __init__(self, t_start):
-        self._t_start = t_start
-
-    def act(self, timestep):
-        current_time = time.time()
-        current_time = current_time - self._t_start
-        print(f"Elapsed time {current_time} | Step {timestep}/{production_steps} " )
 
 class ChangeSerine(hoomd.custom.Action):
 
@@ -79,8 +73,9 @@ class ChangeSerine(hoomd.custom.Action):
 
 class ContactsBackUp(hoomd.custom.Action):
 
-    def __init__(self, glb_contacts):
+    def __init__(self, glb_contacts, logfile):
         self._glb_contacts = glb_contacts
+        self._logfile = logfile
 
     def act(self, timestep):
-        np.savetxt(logfile+"_contactsBCKP.txt", self._glb_contacts, fmt='%f', header="# timestep    SER index    acc    distance     dU  \n# acc= {0->phospho rejected, 1->phospho accepted, 2->dephospho rejected, -1->dephospho accepted} ")
+        np.savetxt(self._logfile+"_contactsBCKP.txt", self._glb_contacts, fmt='%f')
