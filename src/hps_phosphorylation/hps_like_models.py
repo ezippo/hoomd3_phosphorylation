@@ -3,71 +3,116 @@
 
 import sys,os
 import time
+import math
+import logging
+import itertools
+
 import numpy as np
 import hoomd
 import gsd, gsd.hoomd
-import logging
 
 import hps_phosphorylation.hoomd_util as hu
 import hps_phosphorylation.phosphorylation as phospho
 
 ### -------------------------------------- PAIR POTENTIALS DEFINITION -------------------------------------------------------------
+
 ## YUKAWA: elecrostatic interaction with Debey-Huckel screening
-def yukawa_pair_potential(particle_types, cell, aa_type, aa_charge, model='HPS', rescale=0):
+def yukawa_pair_potential(cell, aa_type, R_type_list, aa_charge, model='HPS', rescale=0):
     yukawa = hoomd.md.pair.Yukawa(nlist=cell)
-    inter_types = aa_type
     if rescale!=0:
-        inter_types += [f'{name}_r' for name in aa_type]
-    for i in range(len(particle_types)):
-        atom1 = particle_types[i]
-        for j in range(i,len(particle_types)):
-            atom2 = particle_types[j]
-            if atom1 in inter_types and atom2 in inter_types:
+        rigid_types = [f'{name}_r' for name in aa_type]
+    for i,atom1 in enumerate(aa_type):
+        # interactions IDP-IDP
+        for j in range(i,len(aa_type)):             
+            atom2 = aa_type[j]
+            if model=="CALVADOS2":
+                yukawa.params[(atom1,atom2)] = dict(epsilon=aa_charge[i]*aa_charge[j]*1.782, kappa=1.275)
+                yukawa.r_cut[(atom1,atom2)] = 4.0
+            else:
+                yukawa.params[(atom1,atom2)] = dict(epsilon=aa_charge[i]*aa_charge[j]*1.73136, kappa=1.0)
+                yukawa.r_cut[(atom1,atom2)] = 3.5
+            logging.debug(f"INTERACTIONS : yukawa {atom1}-{atom2}")
+        # interactions IDP-globular
+        if rescale!=0:
+            for j,atom2 in enumerate(rigid_types):     
                 if model=="CALVADOS2":
                     yukawa.params[(atom1,atom2)] = dict(epsilon=aa_charge[i]*aa_charge[j]*1.782, kappa=1.275)
                     yukawa.r_cut[(atom1,atom2)] = 4.0
                 else:
                     yukawa.params[(atom1,atom2)] = dict(epsilon=aa_charge[i]*aa_charge[j]*1.73136, kappa=1.0)
                     yukawa.r_cut[(atom1,atom2)] = 3.5
-            else:
+                logging.debug(f"INTERACTIONS : yukawa {atom1}-{atom2}")
+        # interactions IDP-R particles : no interactions with fictious particles
+        for j,atom2 in enumerate(R_type_list):             
+            yukawa.params[(atom1,atom2)] = dict(epsilon=0, kappa=1.0)
+            yukawa.r_cut[(atom1,atom2)] = 0.0
+            logging.debug(f"INTERACTIONS : yukawa {atom1}-{atom2}")
+    
+    if rescale!=0:
+        for i,atom1 in enumerate(rigid_types):
+            # interactions globular-globular
+            for j in range(i,len(rigid_types)):             
+                atom2 = rigid_types[j]
+                if model=="CALVADOS2":
+                    yukawa.params[(atom1,atom2)] = dict(epsilon=aa_charge[i]*aa_charge[j]*1.782, kappa=1.275)
+                    yukawa.r_cut[(atom1,atom2)] = 4.0
+                else:
+                    yukawa.params[(atom1,atom2)] = dict(epsilon=aa_charge[i]*aa_charge[j]*1.73136, kappa=1.0)
+                    yukawa.r_cut[(atom1,atom2)] = 3.5
+                logging.debug(f"INTERACTIONS : yukawa {atom1}-{atom2}")
+            # interactions globular-R particles : no interactions with fictious particles
+            for j,atom2 in enumerate(R_type_list):             
                 yukawa.params[(atom1,atom2)] = dict(epsilon=0, kappa=1.0)
                 yukawa.r_cut[(atom1,atom2)] = 0.0
+                logging.debug(f"INTERACTIONS : yukawa {atom1}-{atom2}")
+    # interactions R-R particles : no interactions between fictious particles        
+    for i,atom1 in enumerate(R_type_list):
+        for j in range(i,len(R_type_list)):  
+            atom2 = R_type_list[j]
+            yukawa.params[(atom1,atom2)] = dict(epsilon=0, kappa=1.0)
+            yukawa.r_cut[(atom1,atom2)] = 0.0
+            logging.debug(f"INTERACTIONS : yukawa {atom1}-{atom2}")
 
     return yukawa
 
 ## ASHBAUGH-HATCH: Van der Waals interactions + hydrophobicity screening
-def ashbaugh_hatch_pair_potential(particle_types, cell, aa_type, aa_sigma, aa_lambda, model='HPS', rescale=0):
+def ashbaugh_hatch_pair_potential(cell, aa_type, R_type_list, aa_sigma, aa_lambda, model='HPS', rescale=0):
     ashbaugh_table = hoomd.md.pair.Table(nlist=cell)
-    cation_type = ["ARG", "LYS", "ARG_r", "LYS_r"]
-    pi_type = ["PHE", "TRP", "TYR", "PHE_r", "TRP_r", "TYR_r"]
-    r_factor = 1 - rescale/100
-    rigid_types = [f'{name}_r' for name in aa_type]
-    for i in range(len(particle_types)):
-        atom1 = particle_types[i]
-        for j in range(i,len(particle_types)):
-            atom2 = particle_types[j]
-            if atom1 in aa_type and atom2 in aa_type:               # interactions IDP-IDP
+    cation_type = ["ARG", "LYS"]
+    pi_type = ["PHE", "TRP", "TYR"]
+    if rescale!=0:
+        rigid_types = [f'{name}_r' for name in aa_type]
+        r_factor = 1 - rescale/100
+        logging.debug(f"INTERACTIONS: ashbaugh-hatch rescale factor {r_factor}") 
+        cation_type += ["ARG_r", "LYS_r"]
+        pi_type += ["PHE_r", "TRP_r", "TYR_r"]
+    for i,atom1 in enumerate(aa_type):
+        # interactions IDP-IDP
+        for j in range(i,len(aa_type)):             
+            atom2 = aa_type[j]
+            Ulist = np.array(hu.Ulist_ashbaugh(sigma=[aa_sigma[i], aa_sigma[j]], 
+                                    lambda_hps=[aa_lambda[i], aa_lambda[j]],
+                                    r_max=2.0, r_min=0.2, n_bins=100000, epsilon=0.8368) )
+            Flist = np.array(hu.Flist_ashbaugh(sigma=[aa_sigma[i], aa_sigma[j]], 
+                                    lambda_hps=[aa_lambda[i], aa_lambda[j]],
+                                    r_max=2.0, r_min=0.2, n_bins=100000, epsilon=0.8368) )
+            if model=="HPS_cp":
+                # cation-pi interaction
+                if (atom1 in cation_type and atom2 in pi_type) or (atom2 in cation_type and atom1 in pi_type):
+                    Ulist += np.array(hu.Ulist_ashbaugh(sigma=[aa_sigma[i], aa_sigma[j]], 
+                                            lambda_hps=1.0,
+                                            r_max=2.0, r_min=0.2, n_bins=100000, epsilon=3.138) )
+                    Flist += np.array(hu.Flist_ashbaugh(sigma=[aa_sigma[i], aa_sigma[j]], 
+                                            lambda_hps=1.0,
+                                            r_max=2.0, r_min=0.2, n_bins=100000, epsilon=3.138) )
+            ashbaugh_table.params[(atom1, atom2)] = dict(r_min=0.2, U=Ulist, F=Flist)
+            ashbaugh_table.r_cut[(atom1, atom2)] = 2.0            
+            logging.debug(f"INTERACTIONS: ashbaugh-hatch {atom1}-{atom2}")
+        # interactions IDP-globular
+        if rescale!=0:
+            for j,atom2 in enumerate(rigid_types):     
                 Ulist = np.array(hu.Ulist_ashbaugh(sigma=[aa_sigma[i], aa_sigma[j]], 
-                                        lambda_hps=[aa_lambda[i], aa_lambda[j]],
-                                        r_max=2.0, r_min=0.2, n_bins=100000, epsilon=0.8368) )
-                Flist = np.array(hu.Flist_ashbaugh(sigma=[aa_sigma[i], aa_sigma[j]], 
-                                        lambda_hps=[aa_lambda[i], aa_lambda[j]],
-                                        r_max=2.0, r_min=0.2, n_bins=100000, epsilon=0.8368) )
-                if model=="HPS_cp":
-                    # cation-pi interaction
-                    if (atom1 in cation_type and atom2 in pi_type) or (atom2 in cation_type and atom1 in pi_type):
-                        Ulist += np.array(hu.Ulist_ashbaugh(sigma=[aa_sigma[i], aa_sigma[j]], 
-                                                lambda_hps=1.0,
-                                                r_max=2.0, r_min=0.2, n_bins=100000, epsilon=3.138) )
-                        Flist += np.array(hu.Flist_ashbaugh(sigma=[aa_sigma[i], aa_sigma[j]], 
-                                                lambda_hps=1.0,
-                                                r_max=2.0, r_min=0.2, n_bins=100000, epsilon=3.138) )
-                ashbaugh_table.params[(atom1, atom2)] = dict(r_min=0.2, U=Ulist, F=Flist)
-                ashbaugh_table.r_cut[(atom1, atom2)] = 2.0            
-                logging.debug(f"Interactions: ashbaugh-hatch {atom1}-{atom2}")
-            elif atom1 in aa_type and atom2 in rigid_types:               # interactions IDP-globular
-                Ulist = np.array(hu.Ulist_ashbaugh(sigma=[aa_sigma[i], aa_sigma[j]], 
-                                        lambda_hps=[r_factor*aa_lambda[i], r_factor*aa_lambda[j]],          # Scale down lamba by rescaled% for interactions with rigid body particles 
+                                        lambda_hps=[r_factor*aa_lambda[i], r_factor*aa_lambda[j]],                # Scale down lamba by rescale% for interactions with rigid body particles 
                                         r_max=2.0, r_min=0.2, n_bins=100000, epsilon=0.8368) )
                 Flist = np.array(hu.Flist_ashbaugh(sigma=[aa_sigma[i], aa_sigma[j]], 
                                         lambda_hps=[r_factor*aa_lambda[i], r_factor*aa_lambda[j]],
@@ -77,17 +122,55 @@ def ashbaugh_hatch_pair_potential(particle_types, cell, aa_type, aa_sigma, aa_la
                     if (atom1 in cation_type and atom2 in pi_type) or (atom2 in cation_type and atom1 in pi_type):
                         Ulist += np.array(hu.Ulist_ashbaugh(sigma=[aa_sigma[i], aa_sigma[j]], 
                                                 lambda_hps=1.0,
-                                                r_max=2.0, r_min=0.2, n_bins=100000, epsilon=r_factor*3.138) )         # Scale down epsilon by rescaled% for interactions with rigid body particles 
+                                                r_max=2.0, r_min=0.2, n_bins=100000, epsilon=r_factor*3.138) )         # Scale down epsilon by rescale% for interactions with rigid body particles 
                         Flist += np.array(hu.Flist_ashbaugh(sigma=[aa_sigma[i], aa_sigma[j]], 
                                                 lambda_hps=1.0,
                                                 r_max=2.0, r_min=0.2, n_bins=100000, epsilon=r_factor*3.138) )
                 ashbaugh_table.params[(atom1, atom2)] = dict(r_min=0.2, U=Ulist, F=Flist)
                 ashbaugh_table.r_cut[(atom1, atom2)] = 2.0            
-                logging.debug(f"Interactions: ashbaugh-hatch {atom1}-{atom2}")          
-            else:                                       # interactions IDP-globular or with R particles
+                logging.debug(f"INTERACTIONS: ashbaugh-hatch {atom1}-{atom2}")          
+        # interactions IDP-R particles : no interactions with fictious particles
+        for j,atom2 in enumerate(R_type_list):             
+            ashbaugh_table.params[(atom1, atom2)] = dict(r_min=0., U=[0], F=[0])
+            ashbaugh_table.r_cut[(atom1, atom2)] = 0 
+            logging.debug(f"INTERACTIONS: ashbaugh-hatch {atom1}-{atom2}")      
+        
+    if rescale!=0:
+        for i,atom1 in enumerate(rigid_types):
+            # interactions globular-globular
+            for j in range(i,len(rigid_types)):             
+                atom2 = rigid_types[j]
+                Ulist = np.array(hu.Ulist_ashbaugh(sigma=[aa_sigma[i], aa_sigma[j]], 
+                                        lambda_hps=[r_factor*r_factor*aa_lambda[i], r_factor*r_factor*aa_lambda[j]],                # Scale down lamba by rescale*rescale% for interactions between rigid body particles 
+                                        r_max=2.0, r_min=0.2, n_bins=100000, epsilon=0.8368) )
+                Flist = np.array(hu.Flist_ashbaugh(sigma=[aa_sigma[i], aa_sigma[j]], 
+                                        lambda_hps=[r_factor*r_factor*aa_lambda[i], r_factor*r_factor*aa_lambda[j]],
+                                        r_max=2.0, r_min=0.2, n_bins=100000, epsilon=0.8368) )
+                if model=="HPS_cp":
+                    # cation-pi interaction
+                    if (atom1 in cation_type and atom2 in pi_type) or (atom2 in cation_type and atom1 in pi_type):
+                        Ulist += np.array(hu.Ulist_ashbaugh(sigma=[aa_sigma[i], aa_sigma[j]], 
+                                                lambda_hps=1.0,
+                                                r_max=2.0, r_min=0.2, n_bins=100000, epsilon=r_factor*r_factor*3.138) )         # Scale down epsilon by rescale*rescale% for interactions between rigid body particles 
+                        Flist += np.array(hu.Flist_ashbaugh(sigma=[aa_sigma[i], aa_sigma[j]], 
+                                                lambda_hps=1.0,
+                                                r_max=2.0, r_min=0.2, n_bins=100000, epsilon=r_factor*r_factor*3.138) )
+                ashbaugh_table.params[(atom1, atom2)] = dict(r_min=0.2, U=Ulist, F=Flist)
+                ashbaugh_table.r_cut[(atom1, atom2)] = 2.0            
+                logging.debug(f"INTERACTIONS: ashbaugh-hatch {atom1}-{atom2}")          
+            # interactions globular-R particles : no interactions with fictious particles
+            for j,atom2 in enumerate(R_type_list):             
                 ashbaugh_table.params[(atom1, atom2)] = dict(r_min=0., U=[0], F=[0])
                 ashbaugh_table.r_cut[(atom1, atom2)] = 0 
-                logging.debug(f"Interactions: ashbaugh-hatch {atom1}-{atom2}")      
+                logging.debug(f"INTERACTIONS: ashbaugh-hatch {atom1}-{atom2}")      
+
+    # interactions R-R particles : no interactions between fictious particles        
+    for i,atom1 in enumerate(R_type_list):
+        for j in range(i,len(R_type_list)):  
+            atom2 = R_type_list[j]
+            ashbaugh_table.params[(atom1, atom2)] = dict(r_min=0., U=[0], F=[0])
+            ashbaugh_table.r_cut[(atom1, atom2)] = 0 
+            logging.debug(f"INTERACTIONS: ashbaugh-hatch {atom1}-{atom2}")      
             
     return ashbaugh_table
 
@@ -136,10 +219,10 @@ def create_init_configuration(filename, syslist, aa_param_dict, box_length, resc
     chain_lengths_list = []
     for mol in range(n_mols):
         mol_dict = syslist[mol]
-        chain_id, chain_mass, chain_charge, chain_sigma, chain_pos = aa_stats_sequence(mol_dict['pdb'], aa_param_dict)
+        chain_id, chain_mass, chain_charge, chain_sigma, chain_pos = hu.aa_stats_sequence(mol_dict['pdb'], aa_param_dict)
         chain_length = len(chain_id)
         chain_lengths_list += [chain_length]
-        chain_rel_pos = chain_positions_from_pdb(mol_dict['pdb'], relto='com', chain_mass=chain_mass)   # positions relative to c.o.m. 
+        chain_rel_pos = hu.chain_positions_from_pdb(mol_dict['pdb'], relto='com', chain_mass=chain_mass)   # positions relative to c.o.m. 
         n_mol_chains = int(mol_dict['N'])
             
         ## intrinsically disordered case
@@ -157,7 +240,6 @@ def create_init_configuration(filename, syslist, aa_param_dict, box_length, resc
             s.particles.position +=  mol_pos
             s.particles.moment_inertia += [[0,0,0]]*chain_length*n_mol_chains
             s.particles.orientation += [(1, 0, 0, 0)]*chain_length*n_mol_chains
-            #s.particles.body += [-1]*chain_length*n_mol_chains
             
             s.bonds.N += len(bond_pairs)
             s.bonds.typeid += [0]*len(bond_pairs)
@@ -167,7 +249,7 @@ def create_init_configuration(filename, syslist, aa_param_dict, box_length, resc
             
         ## case with rigid bodies
         else:
-            rigid_ind_l = read_rigid_indexes(mol_dict['rigid'])
+            rigid_ind_l = hu.read_rigid_indexes(mol_dict['rigid'])
             n_rigids = len(rigid_ind_l)
 
             types_rigid_bodies = []
@@ -180,7 +262,6 @@ def create_init_configuration(filename, syslist, aa_param_dict, box_length, resc
             charge_free_bodies = []
             position_free_bodies = []
             length_free_bodies = []
-            #body_list = [len(s.particles.types)-len(aa_type)+r for r in range(n_rigids)]
             count_res=0
             # loop on the rigid bodies of the same molecule
             for r in range(n_rigids):
@@ -197,7 +278,7 @@ def create_init_configuration(filename, syslist, aa_param_dict, box_length, resc
                 rigid_com_rel_pos = np.sum(rigid_rel_pos * reshaped_rigid_mass, axis=0) / np.sum(rigid_mass)       # c.o.m. relative to the center of the molecule
                 rigid_rel_pos = rigid_rel_pos-rigid_com_rel_pos             # positions of monomers of the rigid body relative to the c.o.m.
                 position_rigid_bodies += [rigid_com_rel_pos]   
-                I = protein_moment_inertia(rigid_rel_pos, rigid_mass)
+                I = hu.protein_moment_inertia(rigid_rel_pos, rigid_mass)
                 I_diag, E_vec = np.linalg.eig(I)
                 moment_inertia_rigid_bodies += [[I_diag[0], I_diag[1], I_diag[2]]]
                 # create rigid body object
@@ -228,18 +309,17 @@ def create_init_configuration(filename, syslist, aa_param_dict, box_length, resc
                     position_free_bodies += list(free_rel_pos)     
                     length_free_bodies += [len(free_ind)]
                         
-                n_res += len(free_ind) + len(rigid_ind)
+                count_res += len(free_ind) + len(rigid_ind)
                 
             # free monomers in the final tail
             if rigid_ind[-1]<len(chain_id)-1:
-                free_ind = [i for i in range(n_res, len(chain_id))]
+                free_ind = [i for i in range(count_res, len(chain_id))]
                 typeid_free_bodies += [chain_id[i] for i in free_ind]
                 mass_free_bodies += [chain_mass[i] for i in free_ind]
                 charge_free_bodies += [chain_charge[i] for i in free_ind]
                 free_rel_pos = chain_rel_pos[free_ind]                      # positions of the free monomers relative to the center of the molecule
                 position_free_bodies += list(free_rel_pos)  
                 length_free_bodies += [len(free_ind)]
-            #    body_list += [-1]*len(free_ind)
             else:
                 length_free_bodies += [0]
 
@@ -267,7 +347,6 @@ def create_init_configuration(filename, syslist, aa_param_dict, box_length, resc
             s.particles.position += all_positions
             s.particles.moment_inertia += n_mol_chains*(moment_inertia_rigid_bodies + [[0,0,0]]*length_free_total )
             s.particles.orientation += n_mol_chains*([(1, 0, 0, 0)]*(n_rigids+length_free_total) )
-            #s.particles.body += n_mol_chains*body_list
             # bonds
             s.bonds.N += len(bond_pairs)
             s.bonds.typeid += [0]*len(bond_pairs)
@@ -297,7 +376,7 @@ def create_init_configuration(filename, syslist, aa_param_dict, box_length, resc
     s1 = gsd.hoomd.open(name=filename, mode='r+')[0]
     
     ## indexing
-    reordered_ind = reordering_index(syslist)
+    reordered_ind = hu.reordering_index(syslist)
 
     ## bonds free rigid
     bonds_free_rigid = []
@@ -305,7 +384,7 @@ def create_init_configuration(filename, syslist, aa_param_dict, box_length, resc
     for mol in range(n_mols):
         mol_dict = syslist[mol]
         if mol_dict['rigid']!='0':
-            rigid_ind_l = read_rigid_indexes(mol_dict['rigid'])
+            rigid_ind_l = hu.read_rigid_indexes(mol_dict['rigid'])
             n_rigids = len(rigid_ind_l)
             for ch in range(int(mol_dict['N'])):
                 for nr in range(n_rigids):
@@ -369,9 +448,11 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
     logging.basicConfig(level=logging_level)
     # initialize contacts list
     contacts = []
+    logging.debug(f"INPUT : macro_dict: {macro_dict}")
 
     # Input parameters for all the amino acids 
     aa_type = list(aa_param_dict.keys())
+    logging.debug(f"INPUT : aa_type: {aa_type}")
     aa_mass = []
     aa_charge = []
     aa_sigma = []
@@ -383,6 +464,7 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
         aa_lambda.append(aa_param_dict[k][3])
     if rescale!=0:
         aa_type_r = [f"{name}_r" for name in aa_type]
+        logging.debug(f"INPUT : aa_type rigids: {aa_type_r}")
     
     # rigid bodies
     n_mols = len(syslist)
@@ -391,6 +473,7 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
     rigid_masses_l = []
     chain_lengths_l = []
     n_rigids_l = []
+    R_type_list = []
     for mol in range(n_mols):
         mol_dict = syslist[mol]
         chain_id = hu.chain_id_from_pdb(mol_dict['pdb'], aa_param_dict)
@@ -410,6 +493,7 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
                 rigid_rel_pos = rigid_rel_pos-rigid_com_rel_pos             # positions of monomers of the rigid body relative to the c.o.m.
                 prev_rigids += 1
                 rig_name = 'R' + str( prev_rigids )
+                R_type_list += [rig_name]
                 if rescale==0:
                     rigid.body[rig_name] = {
                         "constituent_types": [aa_type[chain_id[i]] for i in rigid_ind_l[nr]],
@@ -428,6 +512,11 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
                         }
         else:
             n_rigids_l += [0]
+    
+    logging.debug(f"INPUT : chain lengths: {chain_lengths_l}")
+    logging.debug(f"RIGID : rigid names: {rig_name}")
+    logging.debug(f"RIGID : total rigid body particles: {prev_rigids}")
+    logging.debug(f"RIGID : n_rigids_l: {n_rigids_l}")
 
     ### HOOMD3 routine
     ## INITIALIZATION
@@ -449,6 +538,7 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
     # indexing and types
     type_id = snap.particles.typeid
     reordered_list = hu.reordering_index(syslist)
+    logging.debug(snap.particles.types)
 
     # phosphosite
     ser_serials = []
@@ -457,9 +547,23 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
         mol_dict = syslist[mol]
         n_mol_chains = int(mol_dict['N'])
         end_index = int( n_mol_chains*(n_rigids_l[mol] + chain_lengths_l[mol]) )
-        if mol_dict['phospho_sites']=='SER':
-            type_list = [type_id[i] for i in reordered_list[prev_res:prev_res+end_index]]
-            tmp_serials = prev_res+np.where(np.isin(type_list,[15,20]))[0]
+        if mol_dict['phospho_sites'].startswith('SER'):
+            ser_specific = mol_dict['phospho_sites'].rsplit(":")
+            if len(ser_specific)==1:
+                type_list = [type_id[i] for i in reordered_list[prev_res:prev_res+end_index]]
+                tmp_serials = prev_res+np.where(np.isin(type_list,[15,20]))[0]
+            elif len(ser_specific)==2:
+                type_list = [type_id[i] for i in reordered_list[prev_res:prev_res+end_index]]
+                start_ser_ind, end_ser_ind = np.array( ser_specific[1].rsplit("-") , dtype=int ) -1
+                tmp_mask = np.isin(type_list,[15,20])
+                for nc in range(n_mol_chains):
+                    tmp_mask[nc*(n_rigids_l[mol]+chain_lengths_l[mol]):nc*(n_rigids_l[mol]+chain_lengths_l[mol])+start_ser_ind] = False
+                    tmp_mask[nc*(n_rigids_l[mol]+chain_lengths_l[mol])+end_ser_ind+1:(nc+1)*(n_rigids_l[mol]+chain_lengths_l[mol])] = False
+                tmp_serials = prev_res+np.where(tmp_mask)[0]
+            else:
+                logging.error(f"phospho-sites are not correctly specified in molecule {mol_dict['mol']}")
+                exit()
+            
         elif mol_dict['phospho_sites']!='0':
             tmp_list = list(map(int, mol_dict['phospho_sites'].rsplit(',')))
             tmp_serials = []
@@ -469,6 +573,7 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
             tmp_serials = []
         ser_serials += [ reordered_list[i] for i in tmp_serials ] 
         prev_res += end_index
+    logging.debug(f"PHOSPHOSITES : ser_serials: {ser_serials}")
 
     # active site
     active_serials_l = []
@@ -482,7 +587,9 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
                 tmp_serials = list( np.array( tmp_list ) + prev_res + nc*(n_rigids_l[mol]+chain_lengths_l[mol]) )
                 active_serials_l += [[ reordered_list[i] for i in tmp_serials ]]
         prev_res += int( n_mol_chains*(n_rigids_l[mol] + chain_lengths_l[mol]) )
-
+    
+    logging.debug(f"ACTIVE SITES : active_serials list: {active_serials_l}")
+    
     # groups
     all_group = hoomd.filter.All()
     moving_group = hoomd.filter.Rigid(("center", "free"))
@@ -496,10 +603,10 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
     else:
         harmonic.params['AA_bond'] = dict(k=8360, r0=0.381)
     # electrostatics forces
-    yukawa = yukawa_pair_potential(snap.particles.types, cell, aa_type, aa_charge, model, rescale)
+    yukawa = yukawa_pair_potential(cell, aa_type, R_type_list, aa_charge, model, rescale)
     # nonbonded: ashbaugh-hatch potential
-    ashbaugh_table = ashbaugh_hatch_pair_potential(snap.particles.types, cell, aa_type, aa_sigma, aa_lambda, model, rescale)
-    
+    ashbaugh_table = ashbaugh_hatch_pair_potential(cell, aa_type, R_type_list, aa_sigma, aa_lambda, model, rescale)
+    logging.debug(f"POTENTIALS : yukawa pair potential: {yukawa}")
     # ## INTEGRATOR
     integrator = hoomd.md.Integrator(production_dt, integrate_rotational_dof=True)        
     # method : Langevin
@@ -592,7 +699,12 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
     
 
 if __name__=='__main__':
-    infile = '../../input0.in'
-    simulate_hps_like(infile, model='HPS', rescale=0)
+    infile = 'tests/sim0_try/input0.in'
+    macro_dict = hu.macros_from_infile(infile)
+    aa_param_dict = hu.aa_stats_from_file(macro_dict['stat_file'])
+    syslist = hu.system_from_file(macro_dict['sysfile'])
+    reord = hu.reordering_index(syslist)
+    print(reord[:300])
+    simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS_cp', rescale=20)
 
 

@@ -19,6 +19,7 @@ if __name__=='__main__':
 
     ## READ INPUT FILE
     macro_dict = hu.macros_from_infile(args.infile)
+    print(args.infile)
     aa_param_dict = hu.aa_stats_from_file(macro_dict['stat_file'])
     syslist = hu.system_from_file(macro_dict['sysfile'])
 

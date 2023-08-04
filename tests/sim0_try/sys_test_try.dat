@@ -1,0 +1,4 @@
+# mol	pdb				                            N	    rigid		active_sites		phospho_sites
+easy	tests/sim0_try/easy_ck1delta.pdb		    2	    0    	0		        0
+TDP43	input_stats/CA_TDP-43_human.pdb	            2   	1-80,106-181,191-261	        	0	    SER:261-400
+CK1d	input_stats/CA_ck1delta_full.pdb			2   	3-294		149,150,151		318,328
