@@ -542,38 +542,44 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
 
     # phosphosite
     ser_serials = []
-    prev_res = 0 
+    prev_res = 0     
+
     for mol in range(n_mols):
         mol_dict = syslist[mol]
         n_mol_chains = int(mol_dict['N'])
-        end_index = int( n_mol_chains*(n_rigids_l[mol] + chain_lengths_l[mol]) )
-        if mol_dict['phospho_sites'].startswith('SER'):
-            ser_specific = mol_dict['phospho_sites'].rsplit(":")
-            if len(ser_specific)==1:
-                type_list = [type_id[i] for i in reordered_list[prev_res:prev_res+end_index]]
-                tmp_serials = prev_res+np.where(np.isin(type_list,[15,20]))[0]
-            elif len(ser_specific)==2:
-                type_list = [type_id[i] for i in reordered_list[prev_res:prev_res+end_index]]
-                start_ser_ind, end_ser_ind = np.array( ser_specific[1].rsplit("-") , dtype=int ) -1
-                tmp_mask = np.isin(type_list,[15,20])
-                for nc in range(n_mol_chains):
-                    tmp_mask[nc*(n_rigids_l[mol]+chain_lengths_l[mol]):nc*(n_rigids_l[mol]+chain_lengths_l[mol])+start_ser_ind] = False
-                    tmp_mask[nc*(n_rigids_l[mol]+chain_lengths_l[mol])+end_ser_ind+1:(nc+1)*(n_rigids_l[mol]+chain_lengths_l[mol])] = False
-                tmp_serials = prev_res+np.where(tmp_mask)[0]
-            else:
-                logging.error(f"phospho-sites are not correctly specified in molecule {mol_dict['mol']}")
-                exit()
+        end_index = int(n_mol_chains * (n_rigids_l[mol] + chain_lengths_l[mol]))
+        
+        phospho_sites = mol_dict['phospho_sites']
+        
+        if phospho_sites == '0':
+            tmp_serials = []
+        elif phospho_sites.startswith('SER'):
+            ser_specific = phospho_sites.rsplit(":")
             
-        elif mol_dict['phospho_sites']!='0':
-            tmp_list = list(map(int, mol_dict['phospho_sites'].rsplit(',')))
+            if len(ser_specific) == 1:
+                type_list = [type_id[i] for i in reordered_list[prev_res:prev_res + end_index]]
+                tmp_serials = prev_res + np.where(np.isin(type_list, [15, 20]))[0]
+            elif len(ser_specific) == 2:
+                type_list = [type_id[i] for i in reordered_list[prev_res:prev_res + end_index]]
+                start_ser_ind, end_ser_ind = np.array(ser_specific[1].rsplit("-"), dtype=int) - 1
+                tmp_mask = np.isin(type_list, [15, 20])
+                for nc in range(n_mol_chains):
+                    tmp_mask[nc*(n_rigids_l[mol] + chain_lengths_l[mol]):nc*(n_rigids_l[mol] + chain_lengths_l[mol]) + start_ser_ind] = False
+                    tmp_mask[nc*(n_rigids_l[mol] + chain_lengths_l[mol]) + end_ser_ind + 1:(nc + 1)*(n_rigids_l[mol] + chain_lengths_l[mol])] = False
+                tmp_serials = prev_res + np.where(tmp_mask)[0]
+            else:
+                raise ValueError(f"phospho-sites are not correctly specified in molecule {mol_dict['mol']}")
+        else:
+            tmp_list = list(map(int, phospho_sites.rsplit(',')))
             tmp_serials = []
             for nc in range(n_mol_chains):
-                tmp_serials += list( np.array( tmp_list ) + prev_res + nc*(n_rigids_l[mol]+chain_lengths_l[mol]) )
-        else:
-            tmp_serials = []
-        ser_serials += [ reordered_list[i] for i in tmp_serials ] 
+                tmp_serials += list(np.array(tmp_list) + prev_res + nc * (n_rigids_l[mol] + chain_lengths_l[mol]))
+        
+        ser_serials += [reordered_list[i] for i in tmp_serials]
         prev_res += end_index
+        
     logging.debug(f"PHOSPHOSITES : ser_serials: {ser_serials}")
+
 
     # active site
     active_serials_l = []
@@ -581,13 +587,21 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
     for mol in range(n_mols):
         mol_dict = syslist[mol]
         n_mol_chains = int(mol_dict['N'])
-        if mol_dict['active_sites']!='0':
-            tmp_list = list(map(int, mol_dict['active_sites'].rsplit(',')))
-            for nc in range(n_mol_chains):
-                tmp_serials = list( np.array( tmp_list ) + prev_res + nc*(n_rigids_l[mol]+chain_lengths_l[mol]) )
-                active_serials_l += [[ reordered_list[i] for i in tmp_serials ]]
-        prev_res += int( n_mol_chains*(n_rigids_l[mol] + chain_lengths_l[mol]) )
-    
+        n_mol_residues = n_rigids_l[mol] + chain_lengths_l[mol]   
+        active_sites = mol_dict['active_sites']
+        
+        if active_sites != '0':
+            active_sites_list = list(map(int, active_sites.split(',')))
+            
+            active_serials_per_chain = [
+                [reordered_list[i] for i in list(np.array(active_sites_list) + prev_res + nc * n_mol_residues)]
+                for nc in range(n_mol_chains)
+            ]
+            
+            active_serials_l.extend(active_serials_per_chain)
+        
+        prev_res +=n_mol_chains*n_mol_residues
+
     logging.debug(f"ACTIVE SITES : active_serials list: {active_serials_l}")
     
     # groups
