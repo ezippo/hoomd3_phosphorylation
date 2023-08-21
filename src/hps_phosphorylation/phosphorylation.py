@@ -4,9 +4,9 @@ import logging
 import hps_phosphorylation.hoomd_util as hu
 import hoomd
 
-def metropolis_boltzmann(dU, dmu, beta=2.494338):
+def metropolis_boltzmann(dU, dmu, kT=2.494338):
     x = np.random.rand()
-    if np.log(x) <= -beta*(dU+dmu):
+    if np.log(x) <= -(dU+dmu)/kT:
         return True
     else:
         return False
