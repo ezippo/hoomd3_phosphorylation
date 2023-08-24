@@ -411,7 +411,7 @@ def create_init_configuration(filename, syslist, aa_param_dict, box_length, resc
 
 ### --------------------------------- SIMULATION MODE ------------------------------------------------
 
-def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0):
+def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0, ness=False):
     # UNITS: distance -> nm   (!!!positions and sigma in files are in agstrom!!!)
     #        mass -> amu
     #        energy -> kJ/mol
@@ -448,6 +448,7 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
     logging.basicConfig(level=logging_level)
     # initialize contacts list
     contacts = []
+    
     logging.debug(f"INPUT : macro_dict: {macro_dict}")
 
     # Input parameters for all the amino acids 
@@ -681,6 +682,20 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
                                     glb_contacts=contacts, temp=temp, Dmu=Dmu, box_size=box_length, contact_dist=contact_dist) ]
         changeser_updaters_l += [ hoomd.update.CustomUpdater(action=changeser_actions_l[-1], trigger=hoomd.trigger.Periodic(dt_try_change, phase=i)) ]
 
+    if ness:
+        bath_dist = float(macro_dict['bath_dist'])
+        dt_bath = int(macro_dict['dt_bath'])
+        changes = []
+        bath_actions_l = []
+        bath_updaters_l = []
+        for i,active_serial in enumerate(active_serials_l):
+            bath_actions_l += [ phospho.ReservoirExchange(active_serials=active_serial, ser_serials=ser_serials, forces=[yukawa, ashbaugh_table], 
+                                    glb_changes=changes, temp=temp, Dmu=Dmu, box_size=box_lenght, bath_dist=bath_dist) ]
+            bath_updaters_l += [ hoomd.update.CustomUpdater(action=bath_actions_l[-1], trigger=hoomd.trigger.Periodic(dt_bath, phase=i)) ]
+    
+        changes_action = phospho.ChangesBackUp(glb_changes=changes, logfile=logfile)
+        changes_bckp_writer = hoomd.write.CustomWriter(action=changes_action, trigger=hoomd.trigger.Periodic(int(dt_backup/2)))
+    
     contacts_action = phospho.ContactsBackUp(glb_contacts=contacts, logfile=logfile)
     contacts_bckp_writer = hoomd.write.CustomWriter(action=contacts_action, trigger=hoomd.trigger.Periodic(int(dt_backup/2)))
     
@@ -696,7 +711,11 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
     for i in range(len(active_serials_l)):
         sim.operations += changeser_updaters_l[i]
     sim.operations += contacts_bckp_writer
-
+    if ness:
+        for i in range(len(active_serials_l)):
+            sim.operations += bath_updaters_l[i]
+        sim.operations += changes_bckp_writer
+    
     sim.run(production_steps-init_step)
 
     if start==1 and len(contacts)!=0:
@@ -708,6 +727,17 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
         np.savetxt(logfile+"_contacts.txt", contacts, fmt='%f', header="# timestep    SER index    acc    distance     dU  \n# acc= {0->phospho rejected, 1->phospho accepted, 2->dephospho rejected, -1->dephospho accepted} ")
     elif start==0:
         np.savetxt(logfile+"_contacts.txt", contacts, fmt='%f', header="# timestep    SER index    acc    distance     dU  \n# acc= {0->phospho rejected, 1->phospho accepted, 2->dephospho rejected, -1->dephospho accepted} ")
+    
+    if ness:
+        if start==1 and len(changes)!=0:
+            cont_prev = np.loadtxt(logfile+"_changes.txt")
+            if len(cont_prev)!=0:
+                if cont_prev.ndim==1:
+                    cont_prev = [cont_prev]
+                changes = np.append(cont_prev, changes, axis=0)
+            np.savetxt(logfile+"_changes.txt", changes, fmt='%f', header="# timestep    SER index    acc    distance     dU  \n# acc= {1->phosphorylation, 10->change SER with SEP, -1->dephospho accepted, -10->change SEP with SER} ")
+        elif start==0:
+            np.savetxt(logfile+"_changes.txt", changes, fmt='%f', header="# timestep    SER index    acc    distance     dU  \n# acc= {1->phosphorylation, 10->change SER with SEP, -1->dephospho accepted, -10->change SEP with SER} ")
     
     hoomd.write.GSD.write(state=sim.state, filename=logfile+'_end.gsd')
     

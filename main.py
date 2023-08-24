@@ -14,7 +14,9 @@ if __name__=='__main__':
     group_mode.add_argument('-m', '--model', type=str, choices=['HPS', 'HPS_cp', 'CALVADOS2'], help='The code will run in simulation mode. The argument of this flag must be the name of the coarse-grained model to use in the simulation.')
     parser.add_argument('-i','--infile', required=True, type=str, help='Input file with simulation parameters, logging file name and parameters, system file name.')
     parser.add_argument('-r', '--rescale', default=0, type=float, help='Scale down rigid body interaction by X percentage. To use also in create_initial_configuration mode to incude the rescaled rigid body types (value of argmuent not important in this case).')
-
+    
+    parser.add_argument('--ness', action='store_true', help='Add the Monte Carlo step to exchange SER/SEP with the chemical bath if the distance from the enzyme is greater than bath_dist. Also a SER/SEP changes file tracker is created at the end of the simulation.' )
+    
     args = parser.parse_args()
 
     ## READ INPUT FILE
@@ -28,4 +30,5 @@ if __name__=='__main__':
         hps.create_init_configuration(filename=macro_dict['logfile']+'_start.gsd', syslist=syslist, aa_param_dict=aa_param_dict, box_length=float( macro_dict['box_length'] ), rescale=bool(args.rescale))
     # simulation mode
     else:
-        hps.simulate_hps_like(macro_dict=macro_dict, aa_param_dict=aa_param_dict, syslist=syslist, model=args.model, rescale=args.rescale)
+        hps.simulate_hps_like(macro_dict=macro_dict, aa_param_dict=aa_param_dict, syslist=syslist, model=args.model, rescale=args.rescale, ness=args.ness)
+        

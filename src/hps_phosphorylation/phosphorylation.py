@@ -70,6 +70,57 @@ class ChangeSerine(hoomd.custom.Action):
                 raise Exception(f"Residue {ser_index} is not a serine!")
 
 
+class ReservoirExchange(hoomd.custom.Action):
+
+    def __init__(self, active_serials, ser_serials, forces, glb_changes, temp, Dmu, box_size, bath_dist):
+        self._active_serials = active_serials
+        self._ser_serials = ser_serials
+        self._forces = forces
+        self._temp = temp
+        self._Dmu = Dmu
+        self._glb_changes = glb_changes
+        self._box_size = box_size
+        self._bath_dist = bath_dist
+        
+    def act(self, timestep):
+        snap = self._state.get_snapshot()
+        positions = snap.particles.position
+        active_pos = positions[self._active_serials]
+        distances = hu.compute_distances_pbc(active_pos, positions[self._ser_serials], self._box_size)
+        distances = np.min(distances, axis=0)
+        min_dist = np.min(distances)
+        
+        if min_dist>self._bath_dist:
+            ser_index = self._ser_serials[np.argmin(distances)]
+
+            if snap.particles.typeid[ser_index]==15:
+                U_in = self._forces[0].energy + self._forces[1].energy
+                snap.particles.typeid[ser_index] = 20
+                self._state.set_snapshot(snap)
+                U_fin = self._forces[0].energy + self._forces[1].energy
+                logging.debug(f"U_fin = {U_fin}, U_in = {U_in}")
+                if metropolis_boltzmann(U_fin-U_in, 0, self._temp):
+                    self._glb_changes += [[timestep, ser_index, 10, min_dist, U_fin-U_in]]
+                else:
+                    snap.particles.typeid[ser_index] = 15
+                    self._state.set_snapshot(snap)
+                        
+            elif snap.particles.typeid[ser_index]==20:
+                U_in = self._forces[0].energy + self._forces[1].energy
+                snap.particles.typeid[ser_index] = 15
+                self._state.set_snapshot(snap)
+                U_fin = self._forces[0].energy + self._forces[1].energy
+                logging.debug(f"U_fin = {U_fin}, U_in = {U_in}")
+                if metropolis_boltzmann(U_fin-U_in, 0, self._temp):
+                    self._glb_changes += [[timestep, ser_index, -10, min_dist, U_fin-U_in]]
+                else:
+                    snap.particles.typeid[ser_index] = 20
+                    self._state.set_snapshot(snap)
+                        
+            else:
+                raise Exception(f"Residue {ser_index} is not a serine!")
+
+
 class ContactsBackUp(hoomd.custom.Action):
 
     def __init__(self, glb_contacts, logfile):
@@ -78,3 +129,12 @@ class ContactsBackUp(hoomd.custom.Action):
 
     def act(self, timestep):
         np.savetxt(self._logfile+"_contactsBCKP.txt", self._glb_contacts, fmt='%f')
+
+
+class ChangesBackUp(hoomd.custom.Action):
+
+    def __init__(self, glb_changes):
+        self._glb_changes = glb_changes
+
+    def act(self, timestep):
+        np.savetxt(logfile+"_changesBCKP.txt", self._glb_changes, fmt='%f')
