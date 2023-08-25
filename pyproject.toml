@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "hps_phosphorylation"
-version = "0.4.6"
+version = "0.4.12"
 authors = [
   { name="Emanuele Zippo", email="zippoema@uni-mainz.de" },
 ]

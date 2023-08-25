@@ -103,7 +103,7 @@ class ChangeSerineNESS(hoomd.custom.Action):
                 if metropolis_boltzmann(U_fin-U_in, self._Dmu, self._temp):
                     logging.info(f"Phosphorylation occured: SER id {ser_index}")
                     self._glb_contacts += [[timestep, ser_index, 1, min_dist, U_fin-U_in]]
-		    self._glb_changes += [[timestep, ser_index, 1, min_dist, U_fin-U_in]]
+                    self._glb_changes += [[timestep, ser_index, 1, min_dist, U_fin-U_in]]
                 else:
                     snap.particles.typeid[ser_index] = 15
                     self._state.set_snapshot(snap)
@@ -119,7 +119,7 @@ class ChangeSerineNESS(hoomd.custom.Action):
                 if metropolis_boltzmann(U_fin-U_in, -self._Dmu, self._temp):
                     logging.info(f"Dephosphorylation occured: SER id {ser_index}")
                     self._glb_contacts += [[timestep, ser_index, -1, min_dist, U_fin-U_in]]
-		    self._glb_changes += [[timestep, ser_index, -1, min_dist, U_fin-U_in]]
+                    self._glb_changes += [[timestep, ser_index, -1, min_dist, U_fin-U_in]]
                 else:
                     snap.particles.typeid[ser_index] = 20
                     self._state.set_snapshot(snap)
@@ -216,11 +216,12 @@ class ContactsBackUp(hoomd.custom.Action):
 
 class ChangesBackUp(hoomd.custom.Action):
 
-    def __init__(self, glb_changes):
+    def __init__(self, glb_changes, logfile):
         self._glb_changes = glb_changes
+        self._logfile = logfile
 
     def act(self, timestep):
-        np.savetxt(logfile+"_changesBCKP.txt", self._glb_changes, fmt='%f')
+        np.savetxt(self._logfile+"_changesBCKP.txt", self._glb_changes, fmt='%f')
 
 
 def phosphosites_from_syslist(syslist, type_id, chain_lengths_l, n_rigids_l):
