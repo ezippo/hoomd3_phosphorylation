@@ -498,12 +498,12 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
     logging.debug(snap.particles.types)
     
     # rigid bodies 
-    rigid, rigid_masses_l, n_rigids_l, R_type_list = hu.rigidbodies_from_syslist(syslist, chain_lengths_l)
+    rigid, rigid_masses_l, n_rigids_l, R_type_list = hu.rigidbodies_from_syslist(syslist, chain_lengths_l, aa_param_dict, rescale)
     logging.debug(f"RIGID : rigid names: {R_type_list}")
     logging.debug(f"RIGID : n_rigids_l: {n_rigids_l}")
     
     # phosphosite
-    ser_serials = phospho.phosphosites_from_syslist(syslist, chain_lengths_l, n_rigids_l)
+    ser_serials = phospho.phosphosites_from_syslist(syslist, type_id, chain_lengths_l, n_rigids_l)
     logging.debug(f"PHOSPHOSITES : ser_serials: {ser_serials}")
 
     # active site
@@ -543,7 +543,7 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
         for i,name in enumerate(aa_type_r):
             langevin.gamma[name] = aa_mass[i]/1000.0
             langevin.gamma_r[name] = (0.0, 0.0, 0.0)
-    for i in range(prev_rigids):
+    for i in range( len(rigid_masses_l) ):
         langevin.gamma['R'+str(i+1)] = rigid_masses_l[i]/1000.0
         langevin.gamma_r['R'+str(i+1)] = (4.0, 4.0, 4.0)
         
@@ -593,7 +593,7 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
         for i,active_serial in enumerate(active_serials_l):
             detector_actions_l += [ phospho.ContactDetector(active_serials=active_serial, ser_serials=ser_serials, glb_contacts=contacts,
                                         box_size=box_length, contact_dist=contact_dist) ]
-            detector_updaters_l += hoomd.update.CustomUpdater(action=detector_actions_l[-1], trigger=hoomd.trigger.Periodic(dt_try_change))
+            detector_updaters_l += [ hoomd.update.CustomUpdater(action=detector_actions_l[-1], trigger=hoomd.trigger.Periodic(dt_try_change)) ]
             
     else:
         changeser_actions_l = []

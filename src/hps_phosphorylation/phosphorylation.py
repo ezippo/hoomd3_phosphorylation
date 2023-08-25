@@ -163,7 +163,7 @@ class ChangesBackUp(hoomd.custom.Action):
         np.savetxt(logfile+"_changesBCKP.txt", self._glb_changes, fmt='%f')
 
 
-def phosphosites_from_syslist(syslist, chain_lengths_l, n_rigids_l):
+def phosphosites_from_syslist(syslist, type_id, chain_lengths_l, n_rigids_l):
     
     reordered_list = hu.reordering_index(syslist)
     n_mols = len(syslist)
@@ -235,7 +235,7 @@ def activesites_from_syslist(syslist, chain_lengths_l, n_rigids_l):
     return activesites
         
         
-if __init__=='__main__':
+if __name__=='__main__':
     infile = 'tests/sim0_try/input0.in'
     macro_dict = hu.macros_from_infile(infile)
     aa_param_dict = hu.aa_stats_from_file(macro_dict['stat_file'])

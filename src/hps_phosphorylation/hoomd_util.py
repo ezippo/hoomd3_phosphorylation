@@ -226,9 +226,18 @@ def read_rigid_indexes(rigid_str):
         return rigid_list
     
 
-def rigidbodies_from_syslist(syslist, chain_lengths_l):
+def rigidbodies_from_syslist(syslist, chain_lengths_l, aa_param_dict, rescale=0):
     
     n_mols = len(syslist)
+    aa_type = list(aa_param_dict.keys())
+    aa_mass = []
+    aa_charge = []
+    for k in aa_type:
+        aa_mass.append(aa_param_dict[k][0])
+        aa_charge.append(aa_param_dict[k][1])
+    if rescale!=0:
+        aa_type_r = [f"{name}_r" for name in aa_type]
+                                                            
     prev_rigids = 0
     rigid = hoomd.md.constrain.Rigid()
     rigid_masses_l = []
