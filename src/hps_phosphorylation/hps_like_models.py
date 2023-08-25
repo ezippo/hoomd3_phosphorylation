@@ -411,7 +411,7 @@ def create_init_configuration(filename, syslist, aa_param_dict, box_length, resc
 
 ### --------------------------------- SIMULATION MODE ------------------------------------------------
 
-def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0, ness=False):
+def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0, mode='relax'):
     # UNITS: distance -> nm   (!!!positions and sigma in files are in agstrom!!!)
     #        mass -> amu
     #        energy -> kJ/mol
@@ -428,7 +428,6 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
     box_length = int(macro_dict['box_length'])
     start = int(macro_dict['start'])	                           # 0 -> new simulation, 1 -> restart
     contact_dist = float(macro_dict['contact_dist'])
-    Dmu = float(macro_dict['Dmu'])
     seed = int(macro_dict['seed'])
     # Logging time interval
     dt_dump = int(macro_dict['dt_dump'])
@@ -467,57 +466,15 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
         aa_type_r = [f"{name}_r" for name in aa_type]
         logging.debug(f"INPUT : aa_type rigids: {aa_type_r}")
     
-    # rigid bodies
+    # molecules chain lengths
     n_mols = len(syslist)
-    prev_rigids = 0
-    rigid = hoomd.md.constrain.Rigid()
-    rigid_masses_l = []
     chain_lengths_l = []
-    n_rigids_l = []
-    R_type_list = []
     for mol in range(n_mols):
         mol_dict = syslist[mol]
         chain_id = hu.chain_id_from_pdb(mol_dict['pdb'], aa_param_dict)
         chain_lengths_l += [len(chain_id)]
-        if mol_dict['rigid']!='0':
-            chain_mass = [aa_mass[chain_id[i]] for i in range(chain_lengths_l[-1])]
-            chain_charge = [aa_charge[chain_id[i]] for i in range(chain_lengths_l[-1])]
-            chain_rel_pos = hu.chain_positions_from_pdb(mol_dict['pdb'], relto='com', chain_mass=chain_mass)   # positions relative to c.o.m. 
-            rigid_ind_l = hu.read_rigid_indexes(mol_dict['rigid'])
-            n_rigids_l += [len(rigid_ind_l)]
-            for nr in range(n_rigids_l[-1]):
-                rigid_mass = [chain_mass[i] for i in rigid_ind_l[nr]]
-                rigid_masses_l += [np.sum(rigid_mass)]
-                rigid_rel_pos = chain_rel_pos[rigid_ind_l[nr]] 
-                reshaped_rigid_mass = np.reshape( rigid_mass, (len(rigid_mass),1) )
-                rigid_com_rel_pos = np.sum(rigid_rel_pos * reshaped_rigid_mass, axis=0) / np.sum(rigid_mass)       # c.o.m. relative to the center of the molecule
-                rigid_rel_pos = rigid_rel_pos-rigid_com_rel_pos             # positions of monomers of the rigid body relative to the c.o.m.
-                prev_rigids += 1
-                rig_name = 'R' + str( prev_rigids )
-                R_type_list += [rig_name]
-                if rescale==0:
-                    rigid.body[rig_name] = {
-                        "constituent_types": [aa_type[chain_id[i]] for i in rigid_ind_l[nr]],
-                        "positions": rigid_rel_pos,
-                        "orientations": [(1,0,0,0)]*len(rigid_ind_l[nr]),
-                        "charges": [ chain_charge[i] for i in rigid_ind_l[nr] ],
-                        "diameters": [0.0]*len(rigid_ind_l[nr])
-                        }
-                else:
-                    rigid.body[rig_name] = {
-                        "constituent_types": [aa_type_r[chain_id[i]] for i in rigid_ind_l[nr]],
-                        "positions": rigid_rel_pos,
-                        "orientations": [(1,0,0,0)]*len(rigid_ind_l[nr]),
-                        "charges": [ chain_charge[i] for i in rigid_ind_l[nr] ],
-                        "diameters": [0.0]*len(rigid_ind_l[nr])
-                        }
-        else:
-            n_rigids_l += [0]
-    
     logging.debug(f"INPUT : chain lengths: {chain_lengths_l}")
-    logging.debug(f"RIGID : rigid names: {rig_name}")
-    logging.debug(f"RIGID : total rigid body particles: {prev_rigids}")
-    logging.debug(f"RIGID : n_rigids_l: {n_rigids_l}")
+
 
     ### HOOMD3 routine
     ## INITIALIZATION
@@ -538,71 +495,19 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
 
     # indexing and types
     type_id = snap.particles.typeid
-    reordered_list = hu.reordering_index(syslist)
     logging.debug(snap.particles.types)
-
+    
+    # rigid bodies 
+    rigid, rigid_masses_l, n_rigids_l, R_type_list = hu.rigidbodies_from_syslist(syslist, chain_lengths_l)
+    logging.debug(f"RIGID : rigid names: {R_type_list}")
+    logging.debug(f"RIGID : n_rigids_l: {n_rigids_l}")
+    
     # phosphosite
-    ser_serials = []
-    prev_res = 0     
-
-    for mol in range(n_mols):
-        mol_dict = syslist[mol]
-        n_mol_chains = int(mol_dict['N'])
-        end_index = int(n_mol_chains * (n_rigids_l[mol] + chain_lengths_l[mol]))
-        
-        phospho_sites = mol_dict['phospho_sites']
-        
-        if phospho_sites == '0':
-            tmp_serials = []
-        elif phospho_sites.startswith('SER'):
-            ser_specific = phospho_sites.rsplit(":")
-            
-            if len(ser_specific) == 1:
-                type_list = [type_id[i] for i in reordered_list[prev_res:prev_res + end_index]]
-                tmp_serials = prev_res + np.where(np.isin(type_list, [15, 20]))[0]
-            elif len(ser_specific) == 2:
-                type_list = [type_id[i] for i in reordered_list[prev_res:prev_res + end_index]]
-                start_ser_ind, end_ser_ind = np.array(ser_specific[1].rsplit("-"), dtype=int) - 1
-                tmp_mask = np.isin(type_list, [15, 20])
-                for nc in range(n_mol_chains):
-                    tmp_mask[nc*(n_rigids_l[mol] + chain_lengths_l[mol]):nc*(n_rigids_l[mol] + chain_lengths_l[mol]) + start_ser_ind] = False
-                    tmp_mask[nc*(n_rigids_l[mol] + chain_lengths_l[mol]) + end_ser_ind + 1:(nc + 1)*(n_rigids_l[mol] + chain_lengths_l[mol])] = False
-                tmp_serials = prev_res + np.where(tmp_mask)[0]
-            else:
-                raise ValueError(f"phospho-sites are not correctly specified in molecule {mol_dict['mol']}")
-        else:
-            tmp_list = list(map(int, phospho_sites.rsplit(',')))
-            tmp_serials = []
-            for nc in range(n_mol_chains):
-                tmp_serials += list(np.array(tmp_list) + prev_res + nc * (n_rigids_l[mol] + chain_lengths_l[mol]))
-        
-        ser_serials += [reordered_list[i] for i in tmp_serials]
-        prev_res += end_index
-        
+    ser_serials = phospho.phosphosites_from_syslist(syslist, chain_lengths_l, n_rigids_l)
     logging.debug(f"PHOSPHOSITES : ser_serials: {ser_serials}")
 
-
     # active site
-    active_serials_l = []
-    prev_res = 0 
-    for mol in range(n_mols):
-        mol_dict = syslist[mol]
-        n_mol_chains = int(mol_dict['N'])
-        n_mol_residues = n_rigids_l[mol] + chain_lengths_l[mol]   
-        active_sites = mol_dict['active_sites']
-        
-        if active_sites != '0':
-            active_sites_list = list(map(int, active_sites.split(',')))
-            
-            active_serials_per_chain = [
-                [reordered_list[i] for i in list(np.array(active_sites_list) + prev_res + nc * n_mol_residues)]
-                for nc in range(n_mol_chains)
-            ]
-            
-            active_serials_l.extend(active_serials_per_chain)
-        
-        prev_res +=n_mol_chains*n_mol_residues
-
+    active_serials_l = phospho.activesites_from_syslist(syslist, chain_lengths_l, n_rigids_l)
     logging.debug(f"ACTIVE SITES : active_serials list: {active_serials_l}")
     
     # groups
@@ -611,19 +516,24 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
     
     ## PAIR INTERACTIONS
     cell = hoomd.md.nlist.Cell(buffer=0.4, exclusions=('bond', 'body'))
+    
     # bonds
     harmonic = hoomd.md.bond.Harmonic()
     if model=="CALVADOS2":
         harmonic.params['AA_bond'] = dict(k=8033, r0=0.381)
     else:
         harmonic.params['AA_bond'] = dict(k=8360, r0=0.381)
+        
     # electrostatics forces
     yukawa = yukawa_pair_potential(cell, aa_type, R_type_list, aa_charge, model, rescale)
+    
     # nonbonded: ashbaugh-hatch potential
     ashbaugh_table = ashbaugh_hatch_pair_potential(cell, aa_type, R_type_list, aa_sigma, aa_lambda, model, rescale)
     logging.debug(f"POTENTIALS : yukawa pair potential: {yukawa}")
+    
     # ## INTEGRATOR
     integrator = hoomd.md.Integrator(production_dt, integrate_rotational_dof=True)        
+    
     # method : Langevin
     langevin = hoomd.md.methods.Langevin(filter=moving_group, kT=temp)
     for i,name in enumerate(aa_type):
@@ -636,8 +546,10 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
     for i in range(prev_rigids):
         langevin.gamma['R'+str(i+1)] = rigid_masses_l[i]/1000.0
         langevin.gamma_r['R'+str(i+1)] = (4.0, 4.0, 4.0)
+        
     # constraints : rigid body
     integrator.rigid = rigid
+    
     # forces 
     integrator.forces.append(harmonic)
     integrator.forces.append(yukawa)
@@ -675,26 +587,37 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
     time_action = hu.PrintTimestep(time_start, production_steps)
     time_writer = hoomd.write.CustomWriter(action=time_action, trigger=hoomd.trigger.Periodic(dt_time))
     
-    changeser_actions_l = []
-    changeser_updaters_l = []
-    for i,active_serial in enumerate(active_serials_l):
-        changeser_actions_l += [ phospho.ChangeSerine(active_serials=active_serial, ser_serials=ser_serials, forces=[yukawa, ashbaugh_table], 
-                                    glb_contacts=contacts, temp=temp, Dmu=Dmu, box_size=box_length, contact_dist=contact_dist) ]
-        changeser_updaters_l += [ hoomd.update.CustomUpdater(action=changeser_actions_l[-1], trigger=hoomd.trigger.Periodic(dt_try_change, phase=i)) ]
-
-    if ness:
-        bath_dist = float(macro_dict['bath_dist'])
-        dt_bath = int(macro_dict['dt_bath'])
-        changes = []
-        bath_actions_l = []
-        bath_updaters_l = []
+    if mode == 'nophospho':
+        detector_actions_l = []
+        detector_updaters_l = []
         for i,active_serial in enumerate(active_serials_l):
-            bath_actions_l += [ phospho.ReservoirExchange(active_serials=active_serial, ser_serials=ser_serials, forces=[yukawa, ashbaugh_table], 
-                                    glb_changes=changes, temp=temp, Dmu=Dmu, box_size=box_lenght, bath_dist=bath_dist) ]
-            bath_updaters_l += [ hoomd.update.CustomUpdater(action=bath_actions_l[-1], trigger=hoomd.trigger.Periodic(dt_bath, phase=i)) ]
-    
-        changes_action = phospho.ChangesBackUp(glb_changes=changes, logfile=logfile)
-        changes_bckp_writer = hoomd.write.CustomWriter(action=changes_action, trigger=hoomd.trigger.Periodic(int(dt_backup/2)))
+            detector_actions_l += [ phospho.ContactDetector(active_serials=active_serial, ser_serials=ser_serials, glb_contacts=contacts,
+                                        box_size=box_length, contact_dist=contact_dist) ]
+            detector_updaters_l += hoomd.update.CustomUpdater(action=detector_actions_l[-1], trigger=hoomd.trigger.Periodic(dt_try_change))
+            
+    else:
+        changeser_actions_l = []
+        changeser_updaters_l = []
+        Dmu = float(macro_dict['Dmu'])
+
+        for i,active_serial in enumerate(active_serials_l):
+            changeser_actions_l += [ phospho.ChangeSerine(active_serials=active_serial, ser_serials=ser_serials, forces=[yukawa, ashbaugh_table], 
+                                        glb_contacts=contacts, temp=temp, Dmu=Dmu, box_size=box_length, contact_dist=contact_dist) ]
+            changeser_updaters_l += [ hoomd.update.CustomUpdater(action=changeser_actions_l[-1], trigger=hoomd.trigger.Periodic(dt_try_change, phase=i)) ]
+
+        if mode == 'ness':
+            bath_dist = float(macro_dict['bath_dist'])
+            dt_bath = int(macro_dict['dt_bath'])
+            changes = []
+            bath_actions_l = []
+            bath_updaters_l = []
+            for i,active_serial in enumerate(active_serials_l):
+                bath_actions_l += [ phospho.ReservoirExchange(active_serials=active_serial, ser_serials=ser_serials, forces=[yukawa, ashbaugh_table], 
+                                        glb_changes=changes, temp=temp, Dmu=Dmu, box_size=box_length, bath_dist=bath_dist) ]
+                bath_updaters_l += [ hoomd.update.CustomUpdater(action=bath_actions_l[-1], trigger=hoomd.trigger.Periodic(dt_bath, phase=i)) ]
+        
+            changes_action = phospho.ChangesBackUp(glb_changes=changes, logfile=logfile)
+            changes_bckp_writer = hoomd.write.CustomWriter(action=changes_action, trigger=hoomd.trigger.Periodic(int(dt_backup/2)))
     
     contacts_action = phospho.ContactsBackUp(glb_contacts=contacts, logfile=logfile)
     contacts_bckp_writer = hoomd.write.CustomWriter(action=contacts_action, trigger=hoomd.trigger.Periodic(int(dt_backup/2)))
@@ -708,13 +631,17 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
     sim.operations.writers.append(backup2_gsd)
     sim.operations.writers.append(tq_gsd)
     sim.operations += time_writer
-    for i in range(len(active_serials_l)):
-        sim.operations += changeser_updaters_l[i]
-    sim.operations += contacts_bckp_writer
-    if ness:
+    if mode == 'nophospho':
         for i in range(len(active_serials_l)):
-            sim.operations += bath_updaters_l[i]
-        sim.operations += changes_bckp_writer
+            sim.operations += detector_updaters_l[i]
+    else:    
+        for i in range(len(active_serials_l)):
+            sim.operations += changeser_updaters_l[i]
+        if mode == 'ness':
+            for i in range(len(active_serials_l)):
+                sim.operations += bath_updaters_l[i]
+            sim.operations += changes_bckp_writer
+    sim.operations += contacts_bckp_writer
     
     sim.run(production_steps-init_step)
 
@@ -728,7 +655,7 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
     elif start==0:
         np.savetxt(logfile+"_contacts.txt", contacts, fmt='%f', header="# timestep    SER index    acc    distance     dU  \n# acc= {0->phospho rejected, 1->phospho accepted, 2->dephospho rejected, -1->dephospho accepted} ")
     
-    if ness:
+    if mode == 'ness':
         if start==1 and len(changes)!=0:
             cont_prev = np.loadtxt(logfile+"_changes.txt")
             if len(cont_prev)!=0:

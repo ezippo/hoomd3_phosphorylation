@@ -15,7 +15,7 @@ if __name__=='__main__':
     parser.add_argument('-i','--infile', required=True, type=str, help='Input file with simulation parameters, logging file name and parameters, system file name.')
     parser.add_argument('-r', '--rescale', default=0, type=float, help='Scale down rigid body interaction by X percentage. To use also in create_initial_configuration mode to incude the rescaled rigid body types (value of argmuent not important in this case).')
     
-    parser.add_argument('--ness', default=False, action='store_true', help='Add the Monte Carlo step to exchange SER/SEP with the chemical bath if the distance from the enzyme is greater than bath_dist. Also a SER/SEP changes file tracker is created at the end of the simulation.' )
+    parser.add_argument('--mode', default='relax', type=str, choices=['relax', 'ness', 'nophospho'], help='Default phosphorzlation is active without exchange SER/SEP with the chemical bath. If ness also exchange step is added. If nophospho phosphorzlation and exchange are deactivated.' )
     
     args = parser.parse_args()
 
@@ -30,5 +30,5 @@ if __name__=='__main__':
         hps.create_init_configuration(filename=macro_dict['logfile']+'_start.gsd', syslist=syslist, aa_param_dict=aa_param_dict, box_length=float( macro_dict['box_length'] ), rescale=bool(args.rescale)) 
     # simulation mode
     else:
-        hps.simulate_hps_like(macro_dict=macro_dict, aa_param_dict=aa_param_dict, syslist=syslist, model=args.model, rescale=args.rescale, ness=args.ness)
+        hps.simulate_hps_like(macro_dict=macro_dict, aa_param_dict=aa_param_dict, syslist=syslist, model=args.model, rescale=args.rescale, mode=args.mode)
         

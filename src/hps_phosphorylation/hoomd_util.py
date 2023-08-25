@@ -226,6 +226,58 @@ def read_rigid_indexes(rigid_str):
         return rigid_list
     
 
+def rigidbodies_from_syslist(syslist, chain_lengths_l):
+    
+    n_mols = len(syslist)
+    prev_rigids = 0
+    rigid = hoomd.md.constrain.Rigid()
+    rigid_masses_l = []
+    n_rigids_l = []
+    R_type_list = []
+    
+    for mol in range(n_mols):
+        mol_dict = syslist[mol]
+        chain_id = chain_id_from_pdb(mol_dict['pdb'], aa_param_dict)
+        
+        if mol_dict['rigid']!='0':
+            chain_mass = [aa_mass[chain_id[i]] for i in range(chain_lengths_l[mol])]
+            chain_charge = [aa_charge[chain_id[i]] for i in range(chain_lengths_l[mol])]
+            chain_rel_pos = chain_positions_from_pdb(mol_dict['pdb'], relto='com', chain_mass=chain_mass)   # positions relative to c.o.m. 
+            rigid_ind_l = read_rigid_indexes(mol_dict['rigid'])
+            n_rigids_l += [len(rigid_ind_l)]
+            
+            for nr in range(n_rigids_l[-1]):
+                rigid_mass = [chain_mass[i] for i in rigid_ind_l[nr]]
+                rigid_masses_l += [np.sum(rigid_mass)]
+                rigid_rel_pos = chain_rel_pos[rigid_ind_l[nr]] 
+                reshaped_rigid_mass = np.reshape( rigid_mass, (len(rigid_mass),1) )
+                rigid_com_rel_pos = np.sum(rigid_rel_pos * reshaped_rigid_mass, axis=0) / np.sum(rigid_mass)       # c.o.m. relative to the center of the molecule
+                rigid_rel_pos = rigid_rel_pos-rigid_com_rel_pos             # positions of monomers of the rigid body relative to the c.o.m.
+                prev_rigids += 1
+                rig_name = 'R' + str( prev_rigids )
+                R_type_list += [rig_name]
+                if rescale==0:
+                    rigid.body[rig_name] = {
+                        "constituent_types": [aa_type[chain_id[i]] for i in rigid_ind_l[nr]],
+                        "positions": rigid_rel_pos,
+                        "orientations": [(1,0,0,0)]*len(rigid_ind_l[nr]),
+                        "charges": [ chain_charge[i] for i in rigid_ind_l[nr] ],
+                        "diameters": [0.0]*len(rigid_ind_l[nr])
+                        }
+                else:
+                    rigid.body[rig_name] = {
+                        "constituent_types": [aa_type_r[chain_id[i]] for i in rigid_ind_l[nr]],
+                        "positions": rigid_rel_pos,
+                        "orientations": [(1,0,0,0)]*len(rigid_ind_l[nr]),
+                        "charges": [ chain_charge[i] for i in rigid_ind_l[nr] ],
+                        "diameters": [0.0]*len(rigid_ind_l[nr])
+                        }
+        else:
+            n_rigids_l += [0]
+
+    return rigid, rigid_masses_l, n_rigids_l, R_type_list
+
+
 def protein_moment_inertia(chain_rel_pos, chain_mass, chain_sigma=None):
     '''
     Parameters
