@@ -1,0 +1,28 @@
+# Simulation parameters
+production_dt   0.01       # Time step for production run in picoseconds
+production_steps 	6000000	    # Total number of steps 
+production_T    300         # Temperature for production run in Kelvin
+box_length  50
+start   1	   # 0 -> new simulation, 1 -> restart
+contact_dist  1.0
+Dmu  -48.0     # mu_adp - mu_atp in cells
+seed    21301
+
+# Logging time interval
+dt_dump 10000
+dt_log  5000000
+dt_backup   5000000
+dt_try_change    200 
+dt_time 500000
+dt_active_ser 2000
+
+# Files
+stat_file   input_stats/stats_module.dat
+file_start  tests/sim_no-phospho/sim_np_try_ck1d-rigid-rescaled_tdp43_end.gsd
+logfile	    tests/sim_no-phospho/sim_np_try_ck1d-rigid-rescaled_tdp43
+sysfile	    input_stats/sys_ck1d_tdp43.dat
+
+# Backend
+dev	 CPU
+logging	 ERROR
+
