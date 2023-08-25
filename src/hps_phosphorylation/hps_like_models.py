@@ -600,17 +600,24 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
         changeser_updaters_l = []
         Dmu = float(macro_dict['Dmu'])
 
-        for i,active_serial in enumerate(active_serials_l):
-            changeser_actions_l += [ phospho.ChangeSerine(active_serials=active_serial, ser_serials=ser_serials, forces=[yukawa, ashbaugh_table], 
+	if mode == 'relax':
+	    for i,active_serial in enumerate(active_serials_l):
+        	changeser_actions_l += [ phospho.ChangeSerine(active_serials=active_serial, ser_serials=ser_serials, forces=[yukawa, ashbaugh_table], 
                                         glb_contacts=contacts, temp=temp, Dmu=Dmu, box_size=box_length, contact_dist=contact_dist) ]
-            changeser_updaters_l += [ hoomd.update.CustomUpdater(action=changeser_actions_l[-1], trigger=hoomd.trigger.Periodic(dt_try_change, phase=i)) ]
+                changeser_updaters_l += [ hoomd.update.CustomUpdater(action=changeser_actions_l[-1], trigger=hoomd.trigger.Periodic(dt_try_change, phase=i)) ]
 
         if mode == 'ness':
-            bath_dist = float(macro_dict['bath_dist'])
+	    bath_dist = float(macro_dict['bath_dist'])
             dt_bath = int(macro_dict['dt_bath'])
             changes = []
             bath_actions_l = []
             bath_updaters_l = []
+
+	    for i,active_serial in enumerate(active_serials_l):
+        	changeser_actions_l += [ phospho.ChangeSerineNESS(active_serials=active_serial, ser_serials=ser_serials, forces=[yukawa, ashbaugh_table], 
+                                        glb_contacts=contacts, glb_changes=changes, temp=temp, Dmu=Dmu, box_size=box_length, contact_dist=contact_dist) ]
+                changeser_updaters_l += [ hoomd.update.CustomUpdater(action=changeser_actions_l[-1], trigger=hoomd.trigger.Periodic(dt_try_change, phase=i)) ]
+
             for i,active_serial in enumerate(active_serials_l):
                 bath_actions_l += [ phospho.ReservoirExchange(active_serials=active_serial, ser_serials=ser_serials, forces=[yukawa, ashbaugh_table], 
                                         glb_changes=changes, temp=temp, Dmu=Dmu, box_size=box_length, bath_dist=bath_dist) ]
