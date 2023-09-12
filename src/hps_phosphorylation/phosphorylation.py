@@ -260,7 +260,7 @@ def phosphosites_from_syslist(syslist, type_id, chain_lengths_l, n_rigids_l):
             tmp_list = list(map(int, phospho_sites.rsplit(',')))
             tmp_serials = []
             for nc in range(n_mol_chains):
-                tmp_serials += list(np.array(tmp_list) + prev_res + nc * (n_rigids_l[mol] + chain_lengths_l[mol]))
+                tmp_serials += list(np.array(tmp_list)-1 + n_rigids_l[mol] + prev_res + nc * (n_rigids_l[mol] + chain_lengths_l[mol]))
         
         phosphosites += [reordered_list[i] for i in tmp_serials]
         prev_res += end_index
@@ -285,23 +285,30 @@ def activesites_from_syslist(syslist, chain_lengths_l, n_rigids_l):
             active_sites_list = list(map(int, active_sites.split(',')))
             
             active_serials_per_chain = [
-                [reordered_list[i] for i in list(np.array(active_sites_list) + prev_res + nc * n_mol_residues)]
-                for nc in range(n_mol_chains)
+                [reordered_list[i] for i in list(np.array(active_sites_list)-1 + n_rigids_l[mol] + prev_res + nc * n_mol_residues)]
+               for nc in range(n_mol_chains)
             ]
             
             activesites.extend(active_serials_per_chain)
         
         prev_res +=n_mol_chains*n_mol_residues
-    
     return activesites
         
         
 if __name__=='__main__':
-    infile = 'tests/sim0_try/input0.in'
+    import gsd
+    
+    infile = 'examples/sim_try_ness/input_try_ser19.in'
     macro_dict = hu.macros_from_infile(infile)
     aa_param_dict = hu.aa_stats_from_file(macro_dict['stat_file'])
     syslist = hu.system_from_file(macro_dict['sysfile'])
-    chain_lengths_l = [40,414,415]
-    n_rigids_l = [80, 76, 71, 292]
-    ser_serials = phosphosites_from_syslist(syslist, chain_lengths_l, n_rigids_l)
+    snap = gsd.hoomd.open(macro_dict['file_start'])[0]
+    type_id = snap.particles.typeid
+    chain_lengths_l = [154,292]
+    n_rigids_l = [1,2]
+    active_serials = activesites_from_syslist(syslist, chain_lengths_l, n_rigids_l)
+    ser_serials = phosphosites_from_syslist(syslist, type_id, chain_lengths_l, n_rigids_l)
     print(ser_serials)
+    print(type_id[ser_serials])
+    print(active_serials)
+    print(type_id[active_serials])
