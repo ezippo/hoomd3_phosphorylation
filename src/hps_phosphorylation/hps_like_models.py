@@ -10,6 +10,7 @@ import itertools
 import numpy as np
 import hoomd
 import gsd, gsd.hoomd
+import ashbaugh_plugin as aplugin
 
 import hps_phosphorylation.hoomd_util as hu
 import hps_phosphorylation.phosphorylation as phospho
@@ -75,14 +76,144 @@ def yukawa_pair_potential(cell, aa_type, R_type_list, aa_charge, model='HPS', re
 
     return yukawa
 
-## ASHBAUGH-HATCH: Van der Waals interactions + hydrophobicity screening
-def ashbaugh_hatch_pair_potential(cell, aa_type, R_type_list, aa_sigma, aa_lambda, model='HPS', rescale=0):
+## ASHBAUGH-HATCH
+# ashbaugh_plugin: Van der Waals interactions (with hydrophobicity screening)
+def ashbaugh_hatch_pair_potential(cell, aa_type, R_type_list, aa_sigma, aa_lambda, rescale=0):
+    ashbaugh = aplugin.pair.AshbaughPair(nlist=cell)
+    eps_ashbaugh = 0.8368
+    if rescale!=0:
+        rigid_types = [f'{name}_r' for name in aa_type]
+        r_factor = 1. - rescale/100.
+        logging.debug(f"INTERACTIONS: ashbaugh-hatch rescale factor {r_factor}") 
+    for i,atom1 in enumerate(aa_type):
+        # interactions IDP-IDP
+        for j in range(i,len(aa_type)):             
+            atom2 = aa_type[j]
+	    sigma_tmp = (aa_sigma[i] + aa_sigma[j])/2.0
+	    lam_tmp = (aa_lambda[i] + aa_lambda[j])/2.0
+            ashbaugh.params[(atom1, atom2)] = dict(epsilon=eps_ashbaugh, sigma=sigma_tmp, lam=lam_tmp)
+            ashbaugh.r_cut[(atom1, atom2)] = 2.0            
+            logging.debug(f"INTERACTIONS: ashbaugh-hatch {atom1}-{atom2}")
+        # interactions IDP-globular
+        if rescale!=0:
+            for j,atom2 in enumerate(rigid_types):     
+	        sigma_tmp = (aa_sigma[i] + aa_sigma[j])/2.0
+	        lam_tmp = r_factor*(aa_lambda[i] + aa_lambda[j])/2.0
+                ashbaugh.params[(atom1, atom2)] = dict(epsilon=eps_ashbaugh, sigma=sigma_tmp, lam=lam_tmp)
+                ashbaugh.r_cut[(atom1, atom2)] = 2.0            
+                logging.debug(f"INTERACTIONS: ashbaugh-hatch {atom1}-{atom2}")          
+        # interactions IDP-R particles : no interactions with fictious particles
+        for j,atom2 in enumerate(R_type_list):             
+            ashbaugh.params[(atom1, atom2)] = dict(epsilon=0, sigma=0, lam=0)
+            ashbaugh.r_cut[(atom1, atom2)] = 0 
+            logging.debug(f"INTERACTIONS: ashbaugh-hatch {atom1}-{atom2}")      
+        
+    if rescale!=0:
+        for i,atom1 in enumerate(rigid_types):
+            # interactions globular-globular
+            for j in range(i,len(rigid_types)):             
+                atom2 = rigid_types[j]
+		sigma_tmp = (aa_sigma[i] + aa_sigma[j])/2.0
+	        lam_tmp = r_factor*r_factor*(aa_lambda[i] + aa_lambda[j])/2.0
+                ashbaugh.params[(atom1, atom2)] = dict(epsilon=eps_ashbaugh, sigma=sigma_tmp, lam=lam_tmp)
+                ashbaugh.r_cut[(atom1, atom2)] = 2.0            
+                logging.debug(f"INTERACTIONS: ashbaugh-hatch {atom1}-{atom2}")          
+            # interactions globular-R particles : no interactions with fictious particles
+            for j,atom2 in enumerate(R_type_list):             
+                ashbaugh.params[(atom1, atom2)] = dict(epsilon=0, sigma=0, lam=0)
+                ashbaugh.r_cut[(atom1, atom2)] = 0 
+                logging.debug(f"INTERACTIONS: ashbaugh-hatch {atom1}-{atom2}")      
+
+    # interactions R-R particles : no interactions between fictious particles        
+    for i,atom1 in enumerate(R_type_list):
+        for j in range(i,len(R_type_list)):  
+            atom2 = R_type_list[j]
+            ashbaugh.params[(atom1, atom2)] = dict(epsilon=0, sigma=0, lam=0)
+            ashbaugh.r_cut[(atom1, atom2)] = 0 
+            logging.debug(f"INTERACTIONS: ashbaugh-hatch {atom1}-{atom2}")      
+            
+    return ashbaugh
+
+
+# hoomd3 Lennard-Jones potential: cation-pi interaction (with hydrophobicity screening)
+def cation_pi_lj_potential(cell, aa_type, R_type_list, aa_sigma, rescale=0):
+    cation_pi_lj = hoomd.md.pair.LJ(nlist=cell)
+    cation_type = ["ARG", "LYS"]
+    pi_type = ["PHE", "TRP", "TYR"]
+    eps_catpi = 3.138
+    if rescale!=0:
+        rigid_types = [f'{name}_r' for name in aa_type]
+        r_factor = 1. - rescale/100.
+        logging.debug(f"INTERACTIONS: ashbaugh-hatch rescale factor {r_factor}") 
+        cation_type += ["ARG_r", "LYS_r"]
+        pi_type += ["PHE_r", "TRP_r", "TYR_r"]
+    for i,atom1 in enumerate(aa_type):
+        # interactions IDP-IDP
+        for j in range(i,len(aa_type)):             
+            atom2 = aa_type[j]
+            if (atom1 in cation_type and atom2 in pi_type) or (atom2 in cation_type and atom1 in pi_type):
+		sigma_tmp = (aa_sigma[i] + aa_sigma[j])/2.0
+		cation_pi_lj.params[(atom1, atom2)] = dict(epsilon=eps_catpi, sigma=sigma_tmp)
+		cation_pi_lj.r_cut[(atom1, atom2)] = 2.0
+	    else:
+		cation_pi_lj.params[(atom1, atom2)] = dict(epsilon=0, sigma=0)
+		cation_pi_lj.r_cut[(atom1, atom2)] = 0
+            logging.debug(f"INTERACTIONS: cation-pi {atom1}-{atom2}")
+        # interactions IDP-globular
+        if rescale!=0:
+            for j,atom2 in enumerate(rigid_types): 
+                if (atom1 in cation_type and atom2 in pi_type) or (atom2 in cation_type and atom1 in pi_type):
+		    sigma_tmp = (aa_sigma[i] + aa_sigma[j])/2.0
+		    cation_pi_lj.params[(atom1, atom2)] = dict(epsilon=r_factor*eps_catpi, sigma=sigma_tmp)
+		    cation_pi_lj.r_cut[(atom1, atom2)] = 2.0
+		else:
+		    cation_pi_lj.params[(atom1, atom2)] = dict(epsilon=0, sigma=0)
+		    cation_pi_lj.r_cut[(atom1, atom2)] = 0
+                logging.debug(f"INTERACTIONS: ashbaugh-hatch {atom1}-{atom2}")          
+        # interactions IDP-R particles : no interactions with fictious particles
+        for j,atom2 in enumerate(R_type_list):             
+            cation_pi_lj.params[(atom1, atom2)] = dict(epsilon=0, sigma=0)
+	    cation_pi_lj.r_cut[(atom1, atom2)] = 0 
+            logging.debug(f"INTERACTIONS: ashbaugh-hatch {atom1}-{atom2}")      
+        
+    if rescale!=0:
+        for i,atom1 in enumerate(rigid_types):
+            # interactions globular-globular
+            for j in range(i,len(rigid_types)):             
+                atom2 = rigid_types[j]
+                if (atom1 in cation_type and atom2 in pi_type) or (atom2 in cation_type and atom1 in pi_type):
+		    sigma_tmp = (aa_sigma[i] + aa_sigma[j])/2.0
+		    cation_pi_lj.params[(atom1, atom2)] = dict(epsilon=r_factor*r_factor*eps_catpi, sigma=sigma_tmp)
+		    cation_pi_lj.r_cut[(atom1, atom2)] = 2.0
+		else:
+		    cation_pi_lj.params[(atom1, atom2)] = dict(epsilon=0, sigma=0)
+		    cation_pi_lj.r_cut[(atom1, atom2)] = 0
+                logging.debug(f"INTERACTIONS: ashbaugh-hatch {atom1}-{atom2}")          
+            # interactions globular-R particles : no interactions with fictious particles
+            for j,atom2 in enumerate(R_type_list):             
+                cation_pi_lj.params[(atom1, atom2)] = dict(epsilon=0, sigma=0)
+	        cation_pi_lj.r_cut[(atom1, atom2)] = 0 
+                logging.debug(f"INTERACTIONS: ashbaugh-hatch {atom1}-{atom2}")      
+
+    # interactions R-R particles : no interactions between fictious particles        
+    for i,atom1 in enumerate(R_type_list):
+        for j in range(i,len(R_type_list)):  
+            atom2 = R_type_list[j]
+            cation_pi_lj.params[(atom1, atom2)] = dict(epsilon=0, sigma=0)
+	    cation_pi_lj.r_cut[(atom1, atom2)] = 0 
+            logging.debug(f"INTERACTIONS: ashbaugh-hatch {atom1}-{atom2}")      
+            
+    return cation_pi_lj
+
+
+# table potential from hoomd3: Van der Waals interactions + cation-pi interaction (with hydrophobicity screening) 
+def table_ashbaugh_pair_potential(cell, aa_type, R_type_list, aa_sigma, aa_lambda, model='HPS', rescale=0):
     ashbaugh_table = hoomd.md.pair.Table(nlist=cell)
     cation_type = ["ARG", "LYS"]
     pi_type = ["PHE", "TRP", "TYR"]
     if rescale!=0:
         rigid_types = [f'{name}_r' for name in aa_type]
-        r_factor = 1 - rescale/100
+        r_factor = 1. - rescale/100.
         logging.debug(f"INTERACTIONS: ashbaugh-hatch rescale factor {r_factor}") 
         cation_type += ["ARG_r", "LYS_r"]
         pi_type += ["PHE_r", "TRP_r", "TYR_r"]
@@ -173,6 +304,8 @@ def ashbaugh_hatch_pair_potential(cell, aa_type, R_type_list, aa_sigma, aa_lambd
             logging.debug(f"INTERACTIONS: ashbaugh-hatch {atom1}-{atom2}")      
             
     return ashbaugh_table
+
+
 
 ### --------------------------------- CREATE INITIAL CONFIGURATION MODE ------------------------------------------------
 
@@ -528,9 +661,12 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
     yukawa = yukawa_pair_potential(cell, aa_type, R_type_list, aa_charge, model, rescale)
     
     # nonbonded: ashbaugh-hatch potential
-    ashbaugh_table = ashbaugh_hatch_pair_potential(cell, aa_type, R_type_list, aa_sigma, aa_lambda, model, rescale)
-    logging.debug(f"POTENTIALS : yukawa pair potential: {yukawa}")
-    
+    # ashbaugh_table = ashbaugh_hatch_pair_potential(cell, aa_type, R_type_list, aa_sigma, aa_lambda, model, rescale)
+    # logging.debug(f"POTENTIALS : yukawa pair potential: {yukawa}")
+    ashbaugh = ashbaugh_hatch_pair_potential(cell, aa_type, R_type_list, aa_sigma, aa_lambda, rescale)
+    if model=='HPS_cp':
+	cationpi_lj = cation_pi_lj_potential(cell, aa_type, R_type_list, aa_sigma, rescale)
+
     # ## INTEGRATOR
     integrator = hoomd.md.Integrator(production_dt, integrate_rotational_dof=True)        
     
@@ -553,7 +689,10 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
     # forces 
     integrator.forces.append(harmonic)
     integrator.forces.append(yukawa)
-    integrator.forces.append(ashbaugh_table)
+    # integrator.forces.append(ashbaugh_table)
+    integrator.forces.append(ashbaugh)
+    if model=='HPS_cp':
+	integrator.forces.append(cationpi_lj)
     integrator.methods.append(langevin)
     
     # ## LOGGING
