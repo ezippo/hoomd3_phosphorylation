@@ -89,16 +89,16 @@ def ashbaugh_hatch_pair_potential(cell, aa_type, R_type_list, aa_sigma, aa_lambd
         # interactions IDP-IDP
         for j in range(i,len(aa_type)):             
             atom2 = aa_type[j]
-	    sigma_tmp = (aa_sigma[i] + aa_sigma[j])/2.0
-	    lam_tmp = (aa_lambda[i] + aa_lambda[j])/2.0
+            sigma_tmp = (aa_sigma[i] + aa_sigma[j])/2.0
+            lam_tmp = (aa_lambda[i] + aa_lambda[j])/2.0
             ashbaugh.params[(atom1, atom2)] = dict(epsilon=eps_ashbaugh, sigma=sigma_tmp, lam=lam_tmp)
             ashbaugh.r_cut[(atom1, atom2)] = 2.0            
             logging.debug(f"INTERACTIONS: ashbaugh-hatch {atom1}-{atom2}")
         # interactions IDP-globular
         if rescale!=0:
             for j,atom2 in enumerate(rigid_types):     
-	        sigma_tmp = (aa_sigma[i] + aa_sigma[j])/2.0
-	        lam_tmp = r_factor*(aa_lambda[i] + aa_lambda[j])/2.0
+	            sigma_tmp = (aa_sigma[i] + aa_sigma[j])/2.0
+                lam_tmp = r_factor*(aa_lambda[i] + aa_lambda[j])/2.0
                 ashbaugh.params[(atom1, atom2)] = dict(epsilon=eps_ashbaugh, sigma=sigma_tmp, lam=lam_tmp)
                 ashbaugh.r_cut[(atom1, atom2)] = 2.0            
                 logging.debug(f"INTERACTIONS: ashbaugh-hatch {atom1}-{atom2}")          
@@ -113,8 +113,8 @@ def ashbaugh_hatch_pair_potential(cell, aa_type, R_type_list, aa_sigma, aa_lambd
             # interactions globular-globular
             for j in range(i,len(rigid_types)):             
                 atom2 = rigid_types[j]
-		sigma_tmp = (aa_sigma[i] + aa_sigma[j])/2.0
-	        lam_tmp = r_factor*r_factor*(aa_lambda[i] + aa_lambda[j])/2.0
+                sigma_tmp = (aa_sigma[i] + aa_sigma[j])/2.0
+                lam_tmp = r_factor*r_factor*(aa_lambda[i] + aa_lambda[j])/2.0
                 ashbaugh.params[(atom1, atom2)] = dict(epsilon=eps_ashbaugh, sigma=sigma_tmp, lam=lam_tmp)
                 ashbaugh.r_cut[(atom1, atom2)] = 2.0            
                 logging.debug(f"INTERACTIONS: ashbaugh-hatch {atom1}-{atom2}")          
@@ -152,28 +152,28 @@ def cation_pi_lj_potential(cell, aa_type, R_type_list, aa_sigma, rescale=0):
         for j in range(i,len(aa_type)):             
             atom2 = aa_type[j]
             if (atom1 in cation_type and atom2 in pi_type) or (atom2 in cation_type and atom1 in pi_type):
-		sigma_tmp = (aa_sigma[i] + aa_sigma[j])/2.0
-		cation_pi_lj.params[(atom1, atom2)] = dict(epsilon=eps_catpi, sigma=sigma_tmp)
-		cation_pi_lj.r_cut[(atom1, atom2)] = 2.0
-	    else:
-		cation_pi_lj.params[(atom1, atom2)] = dict(epsilon=0, sigma=0)
-		cation_pi_lj.r_cut[(atom1, atom2)] = 0
+                sigma_tmp = (aa_sigma[i] + aa_sigma[j])/2.0
+		        cation_pi_lj.params[(atom1, atom2)] = dict(epsilon=eps_catpi, sigma=sigma_tmp)
+		        cation_pi_lj.r_cut[(atom1, atom2)] = 2.0
+            else:
+                cation_pi_lj.params[(atom1, atom2)] = dict(epsilon=0, sigma=0)
+                cation_pi_lj.r_cut[(atom1, atom2)] = 0
             logging.debug(f"INTERACTIONS: cation-pi {atom1}-{atom2}")
         # interactions IDP-globular
         if rescale!=0:
             for j,atom2 in enumerate(rigid_types): 
                 if (atom1 in cation_type and atom2 in pi_type) or (atom2 in cation_type and atom1 in pi_type):
-		    sigma_tmp = (aa_sigma[i] + aa_sigma[j])/2.0
-		    cation_pi_lj.params[(atom1, atom2)] = dict(epsilon=r_factor*eps_catpi, sigma=sigma_tmp)
-		    cation_pi_lj.r_cut[(atom1, atom2)] = 2.0
-		else:
-		    cation_pi_lj.params[(atom1, atom2)] = dict(epsilon=0, sigma=0)
-		    cation_pi_lj.r_cut[(atom1, atom2)] = 0
+                    sigma_tmp = (aa_sigma[i] + aa_sigma[j])/2.0
+                    cation_pi_lj.params[(atom1, atom2)] = dict(epsilon=r_factor*eps_catpi, sigma=sigma_tmp)
+                    cation_pi_lj.r_cut[(atom1, atom2)] = 2.0
+                else:
+                    cation_pi_lj.params[(atom1, atom2)] = dict(epsilon=0, sigma=0)
+                    cation_pi_lj.r_cut[(atom1, atom2)] = 0
                 logging.debug(f"INTERACTIONS: ashbaugh-hatch {atom1}-{atom2}")          
         # interactions IDP-R particles : no interactions with fictious particles
         for j,atom2 in enumerate(R_type_list):             
             cation_pi_lj.params[(atom1, atom2)] = dict(epsilon=0, sigma=0)
-	    cation_pi_lj.r_cut[(atom1, atom2)] = 0 
+    	    cation_pi_lj.r_cut[(atom1, atom2)] = 0 
             logging.debug(f"INTERACTIONS: ashbaugh-hatch {atom1}-{atom2}")      
         
     if rescale!=0:
@@ -182,17 +182,17 @@ def cation_pi_lj_potential(cell, aa_type, R_type_list, aa_sigma, rescale=0):
             for j in range(i,len(rigid_types)):             
                 atom2 = rigid_types[j]
                 if (atom1 in cation_type and atom2 in pi_type) or (atom2 in cation_type and atom1 in pi_type):
-		    sigma_tmp = (aa_sigma[i] + aa_sigma[j])/2.0
-		    cation_pi_lj.params[(atom1, atom2)] = dict(epsilon=r_factor*r_factor*eps_catpi, sigma=sigma_tmp)
-		    cation_pi_lj.r_cut[(atom1, atom2)] = 2.0
-		else:
-		    cation_pi_lj.params[(atom1, atom2)] = dict(epsilon=0, sigma=0)
-		    cation_pi_lj.r_cut[(atom1, atom2)] = 0
+                    sigma_tmp = (aa_sigma[i] + aa_sigma[j])/2.0
+                    cation_pi_lj.params[(atom1, atom2)] = dict(epsilon=r_factor*r_factor*eps_catpi, sigma=sigma_tmp)
+                    cation_pi_lj.r_cut[(atom1, atom2)] = 2.0
+                else:
+                    cation_pi_lj.params[(atom1, atom2)] = dict(epsilon=0, sigma=0)
+                    cation_pi_lj.r_cut[(atom1, atom2)] = 0
                 logging.debug(f"INTERACTIONS: ashbaugh-hatch {atom1}-{atom2}")          
             # interactions globular-R particles : no interactions with fictious particles
             for j,atom2 in enumerate(R_type_list):             
                 cation_pi_lj.params[(atom1, atom2)] = dict(epsilon=0, sigma=0)
-	        cation_pi_lj.r_cut[(atom1, atom2)] = 0 
+    	        cation_pi_lj.r_cut[(atom1, atom2)] = 0 
                 logging.debug(f"INTERACTIONS: ashbaugh-hatch {atom1}-{atom2}")      
 
     # interactions R-R particles : no interactions between fictious particles        
@@ -200,7 +200,7 @@ def cation_pi_lj_potential(cell, aa_type, R_type_list, aa_sigma, rescale=0):
         for j in range(i,len(R_type_list)):  
             atom2 = R_type_list[j]
             cation_pi_lj.params[(atom1, atom2)] = dict(epsilon=0, sigma=0)
-	    cation_pi_lj.r_cut[(atom1, atom2)] = 0 
+	        cation_pi_lj.r_cut[(atom1, atom2)] = 0 
             logging.debug(f"INTERACTIONS: ashbaugh-hatch {atom1}-{atom2}")      
             
     return cation_pi_lj
@@ -665,7 +665,7 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
     # logging.debug(f"POTENTIALS : yukawa pair potential: {yukawa}")
     ashbaugh = ashbaugh_hatch_pair_potential(cell, aa_type, R_type_list, aa_sigma, aa_lambda, rescale)
     if model=='HPS_cp':
-	cationpi_lj = cation_pi_lj_potential(cell, aa_type, R_type_list, aa_sigma, rescale)
+        cationpi_lj = cation_pi_lj_potential(cell, aa_type, R_type_list, aa_sigma, rescale)
 
     # ## INTEGRATOR
     integrator = hoomd.md.Integrator(production_dt, integrate_rotational_dof=True)        
@@ -692,7 +692,7 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
     # integrator.forces.append(ashbaugh_table)
     integrator.forces.append(ashbaugh)
     if model=='HPS_cp':
-	integrator.forces.append(cationpi_lj)
+    	integrator.forces.append(cationpi_lj)
     integrator.methods.append(langevin)
     
     # ## LOGGING
@@ -741,8 +741,12 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
 
         if mode == 'relax':
             for i,active_serial in enumerate(active_serials_l):
-                changeser_actions_l += [ phospho.ChangeSerine(active_serials=active_serial, ser_serials=ser_serials, forces=[yukawa, ashbaugh_table], 
-                                        glb_contacts=contacts, temp=temp, Dmu=Dmu, box_size=box_length, contact_dist=contact_dist) ]
+                if model=='HPS_cp':
+                    changeser_actions_l += [ phospho.ChangeSerine(active_serials=active_serial, ser_serials=ser_serials, forces=[yukawa, ashbaugh, cationpi_lj], 
+                                             glb_contacts=contacts, temp=temp, Dmu=Dmu, box_size=box_length, contact_dist=contact_dist) ]
+                else:
+                    changeser_actions_l += [ phospho.ChangeSerine(active_serials=active_serial, ser_serials=ser_serials, forces=[yukawa, ashbaugh], 
+                                             glb_contacts=contacts, temp=temp, Dmu=Dmu, box_size=box_length, contact_dist=contact_dist) ]
                 changeser_updaters_l += [ hoomd.update.CustomUpdater(action=changeser_actions_l[-1], trigger=hoomd.trigger.Periodic(dt_try_change, phase=i)) ]
                 
         if mode == 'ness':
@@ -753,12 +757,20 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
             bath_updaters_l = []
 
             for i,active_serial in enumerate(active_serials_l):
-                changeser_actions_l += [ phospho.ChangeSerineNESS(active_serials=active_serial, ser_serials=ser_serials, forces=[yukawa, ashbaugh_table], 
+                if model=='HPS_cp':
+                    changeser_actions_l += [ phospho.ChangeSerineNESS(active_serials=active_serial, ser_serials=ser_serials, forces=[yukawa, ashbaugh, cationpi_lj], 
+                                        glb_contacts=contacts, glb_changes=changes, temp=temp, Dmu=Dmu, box_size=box_length, contact_dist=contact_dist) ]
+                else:
+                    changeser_actions_l += [ phospho.ChangeSerineNESS(active_serials=active_serial, ser_serials=ser_serials, forces=[yukawa, ashbaugh], 
                                         glb_contacts=contacts, glb_changes=changes, temp=temp, Dmu=Dmu, box_size=box_length, contact_dist=contact_dist) ]
                 changeser_updaters_l += [ hoomd.update.CustomUpdater(action=changeser_actions_l[-1], trigger=hoomd.trigger.Periodic(dt_try_change, phase=i)) ]
 
             for i,active_serial in enumerate(active_serials_l):
-                bath_actions_l += [ phospho.ReservoirExchange(active_serials=active_serial, ser_serials=ser_serials, forces=[yukawa, ashbaugh_table], 
+                if model=='HPS_cp':
+                    bath_actions_l += [ phospho.ReservoirExchange(active_serials=active_serial, ser_serials=ser_serials, forces=[yukawa, ashbaugh, cationpi_lj], 
+                                        glb_changes=changes, temp=temp, Dmu=Dmu, box_size=box_length, bath_dist=bath_dist) ]
+                else:
+                    bath_actions_l += [ phospho.ReservoirExchange(active_serials=active_serial, ser_serials=ser_serials, forces=[yukawa, ashbaugh], 
                                         glb_changes=changes, temp=temp, Dmu=Dmu, box_size=box_length, bath_dist=bath_dist) ]
                 bath_updaters_l += [ hoomd.update.CustomUpdater(action=bath_actions_l[-1], trigger=hoomd.trigger.Periodic(dt_bath, phase=i)) ]
         
