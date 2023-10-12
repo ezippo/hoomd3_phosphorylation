@@ -97,7 +97,7 @@ def ashbaugh_hatch_pair_potential(cell, aa_type, R_type_list, aa_sigma, aa_lambd
         # interactions IDP-globular
         if rescale!=0:
             for j,atom2 in enumerate(rigid_types):     
-	            sigma_tmp = (aa_sigma[i] + aa_sigma[j])/2.0
+                sigma_tmp = (aa_sigma[i] + aa_sigma[j])/2.0
                 lam_tmp = r_factor*(aa_lambda[i] + aa_lambda[j])/2.0
                 ashbaugh.params[(atom1, atom2)] = dict(epsilon=eps_ashbaugh, sigma=sigma_tmp, lam=lam_tmp)
                 ashbaugh.r_cut[(atom1, atom2)] = 2.0            
@@ -153,8 +153,8 @@ def cation_pi_lj_potential(cell, aa_type, R_type_list, aa_sigma, rescale=0):
             atom2 = aa_type[j]
             if (atom1 in cation_type and atom2 in pi_type) or (atom2 in cation_type and atom1 in pi_type):
                 sigma_tmp = (aa_sigma[i] + aa_sigma[j])/2.0
-		        cation_pi_lj.params[(atom1, atom2)] = dict(epsilon=eps_catpi, sigma=sigma_tmp)
-		        cation_pi_lj.r_cut[(atom1, atom2)] = 2.0
+                cation_pi_lj.params[(atom1, atom2)] = dict(epsilon=eps_catpi, sigma=sigma_tmp)
+                cation_pi_lj.r_cut[(atom1, atom2)] = 2.0
             else:
                 cation_pi_lj.params[(atom1, atom2)] = dict(epsilon=0, sigma=0)
                 cation_pi_lj.r_cut[(atom1, atom2)] = 0
@@ -173,7 +173,7 @@ def cation_pi_lj_potential(cell, aa_type, R_type_list, aa_sigma, rescale=0):
         # interactions IDP-R particles : no interactions with fictious particles
         for j,atom2 in enumerate(R_type_list):             
             cation_pi_lj.params[(atom1, atom2)] = dict(epsilon=0, sigma=0)
-    	    cation_pi_lj.r_cut[(atom1, atom2)] = 0 
+            cation_pi_lj.r_cut[(atom1, atom2)] = 0 
             logging.debug(f"INTERACTIONS: ashbaugh-hatch {atom1}-{atom2}")      
         
     if rescale!=0:
@@ -192,7 +192,7 @@ def cation_pi_lj_potential(cell, aa_type, R_type_list, aa_sigma, rescale=0):
             # interactions globular-R particles : no interactions with fictious particles
             for j,atom2 in enumerate(R_type_list):             
                 cation_pi_lj.params[(atom1, atom2)] = dict(epsilon=0, sigma=0)
-    	        cation_pi_lj.r_cut[(atom1, atom2)] = 0 
+                cation_pi_lj.r_cut[(atom1, atom2)] = 0 
                 logging.debug(f"INTERACTIONS: ashbaugh-hatch {atom1}-{atom2}")      
 
     # interactions R-R particles : no interactions between fictious particles        
@@ -200,7 +200,7 @@ def cation_pi_lj_potential(cell, aa_type, R_type_list, aa_sigma, rescale=0):
         for j in range(i,len(R_type_list)):  
             atom2 = R_type_list[j]
             cation_pi_lj.params[(atom1, atom2)] = dict(epsilon=0, sigma=0)
-	        cation_pi_lj.r_cut[(atom1, atom2)] = 0 
+            cation_pi_lj.r_cut[(atom1, atom2)] = 0 
             logging.debug(f"INTERACTIONS: ashbaugh-hatch {atom1}-{atom2}")      
             
     return cation_pi_lj
@@ -692,7 +692,7 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
     # integrator.forces.append(ashbaugh_table)
     integrator.forces.append(ashbaugh)
     if model=='HPS_cp':
-    	integrator.forces.append(cationpi_lj)
+        integrator.forces.append(cationpi_lj)
     integrator.methods.append(langevin)
     
     # ## LOGGING

@@ -6,8 +6,6 @@ import numpy as np
 import gsd.hoomd
 import hoomd
 
-import hps_phosphorylation.hoomd_util as hu
-
 class PrintTimestep(hoomd.custom.Action):
 
     def __init__(self, t_start, production_steps):
