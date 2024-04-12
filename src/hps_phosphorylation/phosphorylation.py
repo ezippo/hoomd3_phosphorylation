@@ -298,14 +298,14 @@ def activesites_from_syslist(syslist, chain_lengths_l, n_rigids_l):
 if __name__=='__main__':
     import gsd
     
-    infile = 'examples/sim_try_ness/input_try_ser19.in'
+    infile = 'examples/sim_try/input_try.in'
     macro_dict = hu.macros_from_infile(infile)
     aa_param_dict = hu.aa_stats_from_file(macro_dict['stat_file'])
     syslist = hu.system_from_file(macro_dict['sysfile'])
     snap = gsd.hoomd.open(macro_dict['file_start'])[0]
     type_id = snap.particles.typeid
-    chain_lengths_l = [154,292]
-    n_rigids_l = [1,2]
+    chain_lengths_l = [154,292,415]
+    n_rigids_l = [1,2,2]
     active_serials = activesites_from_syslist(syslist, chain_lengths_l, n_rigids_l)
     ser_serials = phosphosites_from_syslist(syslist, type_id, chain_lengths_l, n_rigids_l)
     print(ser_serials)

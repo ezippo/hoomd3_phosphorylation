@@ -737,16 +737,19 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
     else:
         changeser_actions_l = []
         changeser_updaters_l = []
-        Dmu = float(macro_dict['Dmu'])
+        Dmu_array = list(macro_dict['Dmu'])
+        if len(Dmu_array) != len(active_serials_l):
+            print('ERROR: parameter Dmu in input file must have a number of input equal to the number of enzymes present in the simulation! ')
+            exit()
 
         if mode == 'relax':
             for i,active_serial in enumerate(active_serials_l):
                 if model=='HPS_cp':
                     changeser_actions_l += [ phospho.ChangeSerine(active_serials=active_serial, ser_serials=ser_serials, forces=[yukawa, ashbaugh, cationpi_lj], 
-                                             glb_contacts=contacts, temp=temp, Dmu=Dmu, box_size=box_length, contact_dist=contact_dist) ]
+                                             glb_contacts=contacts, temp=temp, Dmu=float(Dmu_array[i]), box_size=box_length, contact_dist=contact_dist) ]
                 else:
                     changeser_actions_l += [ phospho.ChangeSerine(active_serials=active_serial, ser_serials=ser_serials, forces=[yukawa, ashbaugh], 
-                                             glb_contacts=contacts, temp=temp, Dmu=Dmu, box_size=box_length, contact_dist=contact_dist) ]
+                                             glb_contacts=contacts, temp=temp, Dmu=float(Dmu_array[i]), box_size=box_length, contact_dist=contact_dist) ]
                 changeser_updaters_l += [ hoomd.update.CustomUpdater(action=changeser_actions_l[-1], trigger=hoomd.trigger.Periodic(dt_try_change, phase=i)) ]
                 
         if mode == 'ness':
@@ -759,19 +762,19 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
             for i,active_serial in enumerate(active_serials_l):
                 if model=='HPS_cp':
                     changeser_actions_l += [ phospho.ChangeSerineNESS(active_serials=active_serial, ser_serials=ser_serials, forces=[yukawa, ashbaugh, cationpi_lj], 
-                                        glb_contacts=contacts, glb_changes=changes, temp=temp, Dmu=Dmu, box_size=box_length, contact_dist=contact_dist) ]
+                                        glb_contacts=contacts, glb_changes=changes, temp=temp, Dmu=float(Dmu_array[i]), box_size=box_length, contact_dist=contact_dist) ]
                 else:
                     changeser_actions_l += [ phospho.ChangeSerineNESS(active_serials=active_serial, ser_serials=ser_serials, forces=[yukawa, ashbaugh], 
-                                        glb_contacts=contacts, glb_changes=changes, temp=temp, Dmu=Dmu, box_size=box_length, contact_dist=contact_dist) ]
+                                        glb_contacts=contacts, glb_changes=changes, temp=temp, Dmu=float(Dmu_array[i]), box_size=box_length, contact_dist=contact_dist) ]
                 changeser_updaters_l += [ hoomd.update.CustomUpdater(action=changeser_actions_l[-1], trigger=hoomd.trigger.Periodic(dt_try_change, phase=i)) ]
 
             for i,active_serial in enumerate(active_serials_l):
                 if model=='HPS_cp':
                     bath_actions_l += [ phospho.ReservoirExchange(active_serials=active_serial, ser_serials=ser_serials, forces=[yukawa, ashbaugh, cationpi_lj], 
-                                        glb_changes=changes, temp=temp, Dmu=Dmu, box_size=box_length, bath_dist=bath_dist) ]
+                                        glb_changes=changes, temp=temp, Dmu=float(Dmu_array[i]), box_size=box_length, bath_dist=bath_dist) ]
                 else:
                     bath_actions_l += [ phospho.ReservoirExchange(active_serials=active_serial, ser_serials=ser_serials, forces=[yukawa, ashbaugh], 
-                                        glb_changes=changes, temp=temp, Dmu=Dmu, box_size=box_length, bath_dist=bath_dist) ]
+                                        glb_changes=changes, temp=temp, Dmu=float(Dmu_array[i]), box_size=box_length, bath_dist=bath_dist) ]
                 bath_updaters_l += [ hoomd.update.CustomUpdater(action=bath_actions_l[-1], trigger=hoomd.trigger.Periodic(dt_bath, phase=i)) ]
         
             changes_action = phospho.ChangesBackUp(glb_changes=changes, logfile=logfile)
@@ -825,15 +828,15 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
             np.savetxt(logfile+"_changes.txt", changes, fmt='%f', header="# timestep    SER index    acc    distance     dU  \n# acc= {1->phosphorylation, 10->change SER with SEP, -1->dephospho accepted, -10->change SEP with SER} ")
     
     hoomd.write.GSD.write(state=sim.state, filename=logfile+'_end.gsd')
-    
+
 
 if __name__=='__main__':
-    infile = 'tests/sim0_try/input0.in'
+    infile = 'examples/sim_try/input_try.in'
     macro_dict = hu.macros_from_infile(infile)
     aa_param_dict = hu.aa_stats_from_file(macro_dict['stat_file'])
     syslist = hu.system_from_file(macro_dict['sysfile'])
     reord = hu.reordering_index(syslist)
     print(reord[:300])
-    simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS_cp', rescale=20)
+    simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS_cp', rescale=30)
 
 
