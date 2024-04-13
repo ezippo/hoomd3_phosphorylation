@@ -15,7 +15,7 @@ def metropolis_boltzmann(dU, dmu, kT=2.494338):
 
 class ChangeSerine(hoomd.custom.Action):
 
-    def __init__(self, active_serials, ser_serials, forces, glb_contacts, temp, Dmu, box_size, contact_dist):
+    def __init__(self, active_serials, ser_serials, forces, glb_contacts, temp, Dmu, box_size, contact_dist, enzyme_ind):
         self._active_serials = active_serials
         self._ser_serials = ser_serials
         self._forces = forces
@@ -24,6 +24,7 @@ class ChangeSerine(hoomd.custom.Action):
         self._Dmu = Dmu
         self._box_size = box_size
         self._contact_dist = contact_dist
+        self._enzyme_ind = enzyme_ind
 
     def act(self, timestep):
         snap = self._state.get_snapshot()
@@ -44,12 +45,12 @@ class ChangeSerine(hoomd.custom.Action):
                 logging.debug(f"U_fin = {U_fin}, U_in = {U_in}")
                 if metropolis_boltzmann(U_fin-U_in, self._Dmu, self._temp):
                     logging.info(f"Phosphorylation occured: SER id {ser_index}")
-                    self._glb_contacts += [[timestep, ser_index, 1, min_dist, U_fin-U_in]]
+                    self._glb_contacts += [[timestep, ser_index, 1, min_dist, U_fin-U_in, self._enzyme_ind]]
                 else:
                     snap.particles.typeid[ser_index] = 15
                     self._state.set_snapshot(snap)
                     logging.info(f'Phosphorylation SER id {ser_index} not accepted')
-                    self._glb_contacts += [[timestep, ser_index, 0, min_dist, U_fin-U_in]]
+                    self._glb_contacts += [[timestep, ser_index, 0, min_dist, U_fin-U_in, self._enzyme_ind]]
                     
             elif snap.particles.typeid[ser_index]==20:
                 U_in = self._forces[0].energy + self._forces[1].energy
@@ -59,12 +60,12 @@ class ChangeSerine(hoomd.custom.Action):
                 logging.debug(f"U_fin = {U_fin}, U_in = {U_in}")
                 if metropolis_boltzmann(U_fin-U_in, -self._Dmu, self._temp):
                     logging.info(f"Dephosphorylation occured: SER id {ser_index}")
-                    self._glb_contacts += [[timestep, ser_index, -1, min_dist, U_fin-U_in]]
+                    self._glb_contacts += [[timestep, ser_index, -1, min_dist, U_fin-U_in, self._enzyme_ind]]
                 else:
                     snap.particles.typeid[ser_index] = 20
                     self._state.set_snapshot(snap)
                     logging.info(f'Dephosphorylation SER id {ser_index} not accepted')
-                    self._glb_contacts += [[timestep, ser_index, 2, min_dist, U_fin-U_in]]
+                    self._glb_contacts += [[timestep, ser_index, 2, min_dist, U_fin-U_in, self._enzyme_ind]]
 
             else:
                 raise Exception(f"Residue {ser_index} is not a serine!")

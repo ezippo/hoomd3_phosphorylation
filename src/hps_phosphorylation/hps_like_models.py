@@ -746,10 +746,10 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
             for i,active_serial in enumerate(active_serials_l):
                 if model=='HPS_cp':
                     changeser_actions_l += [ phospho.ChangeSerine(active_serials=active_serial, ser_serials=ser_serials, forces=[yukawa, ashbaugh, cationpi_lj], 
-                                             glb_contacts=contacts, temp=temp, Dmu=float(Dmu_array[i]), box_size=box_length, contact_dist=contact_dist) ]
+                                             glb_contacts=contacts, temp=temp, Dmu=float(Dmu_array[i]), box_size=box_length, contact_dist=contact_dist, enzyme_ind=i) ]
                 else:
                     changeser_actions_l += [ phospho.ChangeSerine(active_serials=active_serial, ser_serials=ser_serials, forces=[yukawa, ashbaugh], 
-                                             glb_contacts=contacts, temp=temp, Dmu=float(Dmu_array[i]), box_size=box_length, contact_dist=contact_dist) ]
+                                             glb_contacts=contacts, temp=temp, Dmu=float(Dmu_array[i]), box_size=box_length, contact_dist=contact_dist, enzyme_ind=i) ]
                 changeser_updaters_l += [ hoomd.update.CustomUpdater(action=changeser_actions_l[-1], trigger=hoomd.trigger.Periodic(dt_try_change, phase=i)) ]
                 
         if mode == 'ness':
