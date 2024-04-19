@@ -544,7 +544,7 @@ def create_init_configuration(filename, syslist, aa_param_dict, box_length, resc
 
 ### --------------------------------- SIMULATION MODE ------------------------------------------------
 
-def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0, mode='relax'):
+def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0, mode='relax', resize=None):
     # UNITS: distance -> nm   (!!!positions and sigma in files are in agstrom!!!)
     #        mass -> amu
     #        energy -> kJ/mol
@@ -783,6 +783,16 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
     contacts_action = phospho.ContactsBackUp(glb_contacts=contacts, logfile=logfile)
     contacts_bckp_writer = hoomd.write.CustomWriter(action=contacts_action, trigger=hoomd.trigger.Periodic(int(dt_backup/2)))
     
+    # # Box resize
+    if resize != None:
+	ramp = hoomd.variant.Ramp(A=0, B=1, t_start=init_step, t_ramp=production_steps-init_step)
+	initial_box = sim.state.box
+	final_box = hoomd.Box(Lx=resize[0], Ly=resize[1], Lz=resize[2])
+	box_resize_trigger = hoomd.trigger.Periodic(10)
+	box_resize = hoomd.update.BoxResize(box1=initial_box, box2=final_box, variant=ramp, trigger=box_resize_trigger)
+
+	sim.operations.updaters.append(box_resize)
+
     # ## SET SIMULATION OPERATIONS
     sim.operations.integrator = integrator 
     sim.operations.computes.append(therm_quantities)
