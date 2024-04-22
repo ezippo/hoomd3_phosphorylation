@@ -30,7 +30,7 @@ class ChangeSerine(hoomd.custom.Action):
         snap = self._state.get_snapshot()
         positions = snap.particles.position
         active_pos = positions[self._active_serials]
-        distances = hu.compute_distances_pbc(active_pos, positions[self._ser_serials], self._box_size)
+        distances = hu.compute_distances_pbc(active_pos, positions[self._ser_serials],  self._box_size[0], self._box_size[1], self._box_size[2])
         distances = np.max(distances, axis=0)
         min_dist = np.min(distances)
 
@@ -88,7 +88,7 @@ class ChangeSerineNESS(hoomd.custom.Action):
         snap = self._state.get_snapshot()
         positions = snap.particles.position
         active_pos = positions[self._active_serials]
-        distances = hu.compute_distances_pbc(active_pos, positions[self._ser_serials], self._box_size)
+        distances = hu.compute_distances_pbc(active_pos, positions[self._ser_serials],  self._box_size[0], self._box_size[1], self._box_size[2])
         distances = np.max(distances, axis=0)
         min_dist = np.min(distances)
 
@@ -147,7 +147,7 @@ class ReservoirExchange(hoomd.custom.Action):
         snap = self._state.get_snapshot()
         positions = snap.particles.position
         active_pos = positions[self._active_serials]
-        distances = hu.compute_distances_pbc(active_pos, positions[self._ser_serials], self._box_size)
+        distances = hu.compute_distances_pbc(active_pos, positions[self._ser_serials],  self._box_size[0], self._box_size[1], self._box_size[2])
         distances = np.min(distances, axis=0)
         min_dist = np.min(distances)
         
@@ -195,7 +195,7 @@ class ContactDetector(hoomd.custom.Action):
         snap = self._state.get_snapshot()
         positions = snap.particles.position
         active_pos = positions[self._active_serials]
-        distances = hu.compute_distances_pbc(active_pos, positions[self._ser_serials], self._box_size)
+        distances = hu.compute_distances_pbc(active_pos, positions[self._ser_serials], self._box_size[0], self._box_size[1], self._box_size[2])
         distances = np.max(distances, axis=0)
         logging.debug(f"ChangeSerine: distances {distances}")
         min_dist = np.min(distances)

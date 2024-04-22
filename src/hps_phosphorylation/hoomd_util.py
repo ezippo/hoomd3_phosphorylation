@@ -493,9 +493,9 @@ def Flist_ashbaugh(sigma, lambda_hps, r_max, r_min=0.4, n_bins=100, epsilon=0.83
     return Flist
 
 
-def compute_distances_pbc(p1, p2, box_size):
+def compute_distances_pbc(p1, p2, x_side, y_side, z_side):
     """
-    Compute the distances between two arrays of particles in a cubic box
+    Compute the distances between two arrays of particles in a box
     with periodic boundary conditions.
 
     Args:
@@ -503,7 +503,9 @@ def compute_distances_pbc(p1, p2, box_size):
                           Shape: (N1, 3), where N1 is the number of particles.
         p2 (numpy array): Positions of particles in group 2.
                           Shape: (N2, 3), where N2 is the number of particles.
-        box_size (float): Size of the cubic box.
+        x_side (float):   Size of the side in x direction.
+        y_side (float):   Size of the side in y direction.
+        z_side (float):   Size of the side in z direction.
 
     Returns:
         numpy array: Distances between the particles.
@@ -515,9 +517,9 @@ def compute_distances_pbc(p1, p2, box_size):
     dz = np.abs(p1[:, 2, None] - p2[:, 2])
 
     # Apply periodic boundary conditions
-    dx = np.minimum(dx, box_size - dx)
-    dy = np.minimum(dy, box_size - dy)
-    dz = np.minimum(dz, box_size - dz)
+    dx = np.minimum(dx, x_side - dx)
+    dy = np.minimum(dy, y_side - dy)
+    dz = np.minimum(dz, z_side - dz)
 
     # Compute the Euclidean distance
     dist = np.sqrt(dx**2 + dy**2 + dz**2)

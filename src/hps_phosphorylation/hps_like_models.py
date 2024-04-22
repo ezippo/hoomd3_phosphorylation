@@ -558,9 +558,10 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
     production_steps = int(macro_dict['production_steps'])                       # Total number of steps 
     production_T = float(macro_dict['production_T'])                      # Temperature for production run in Kelvin
     temp = production_T * 0.00831446                  # Temp is RT [kJ/mol]
-    box_length = int(macro_dict['box_length'])
     start = int(macro_dict['start'])	                           # 0 -> new simulation, 1 -> restart
-    
+    box_size = list(macro_dict['box'])              # box side lengths [Lx Ly Lz]
+    box_size = [ float(box_size[i]) for i in range(3) ]
+
     seed = int(macro_dict['seed'])
     # Logging time interval
     dt_dump = int(macro_dict['dt_dump'])
@@ -733,7 +734,7 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
             detector_updaters_l = []
             for i,active_serial in enumerate(active_serials_l):
                 detector_actions_l += [ phospho.ContactDetector(active_serials=active_serial, ser_serials=ser_serials, glb_contacts=contacts,
-                                            box_size=box_length, contact_dist=contact_dist) ]
+                                            box_size=box_size, contact_dist=contact_dist) ]
                 detector_updaters_l += [ hoomd.update.CustomUpdater(action=detector_actions_l[-1], trigger=hoomd.trigger.Periodic(dt_try_change)) ]
                 
         else:
@@ -748,10 +749,10 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
                 for i,active_serial in enumerate(active_serials_l):
                     if model=='HPS_cp':
                         changeser_actions_l += [ phospho.ChangeSerine(active_serials=active_serial, ser_serials=ser_serials, forces=[yukawa, ashbaugh, cationpi_lj], 
-                                                glb_contacts=contacts, temp=temp, Dmu=float(Dmu_array[i]), box_size=box_length, contact_dist=contact_dist, enzyme_ind=i) ]
+                                                glb_contacts=contacts, temp=temp, Dmu=float(Dmu_array[i]), box_size=box_size, contact_dist=contact_dist, enzyme_ind=i) ]
                     else:
                         changeser_actions_l += [ phospho.ChangeSerine(active_serials=active_serial, ser_serials=ser_serials, forces=[yukawa, ashbaugh], 
-                                                glb_contacts=contacts, temp=temp, Dmu=float(Dmu_array[i]), box_size=box_length, contact_dist=contact_dist, enzyme_ind=i) ]
+                                                glb_contacts=contacts, temp=temp, Dmu=float(Dmu_array[i]), box_size=box_size, contact_dist=contact_dist, enzyme_ind=i) ]
                     changeser_updaters_l += [ hoomd.update.CustomUpdater(action=changeser_actions_l[-1], trigger=hoomd.trigger.Periodic(dt_try_change, phase=i)) ]
                     
             if mode == 'ness':
@@ -764,19 +765,19 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
                 for i,active_serial in enumerate(active_serials_l):
                     if model=='HPS_cp':
                         changeser_actions_l += [ phospho.ChangeSerineNESS(active_serials=active_serial, ser_serials=ser_serials, forces=[yukawa, ashbaugh, cationpi_lj], 
-                                            glb_contacts=contacts, glb_changes=changes, temp=temp, Dmu=float(Dmu_array[i]), box_size=box_length, contact_dist=contact_dist) ]
+                                            glb_contacts=contacts, glb_changes=changes, temp=temp, Dmu=float(Dmu_array[i]), box_size=box_size, contact_dist=contact_dist) ]
                     else:
                         changeser_actions_l += [ phospho.ChangeSerineNESS(active_serials=active_serial, ser_serials=ser_serials, forces=[yukawa, ashbaugh], 
-                                            glb_contacts=contacts, glb_changes=changes, temp=temp, Dmu=float(Dmu_array[i]), box_size=box_length, contact_dist=contact_dist) ]
+                                            glb_contacts=contacts, glb_changes=changes, temp=temp, Dmu=float(Dmu_array[i]), box_size=box_size, contact_dist=contact_dist) ]
                     changeser_updaters_l += [ hoomd.update.CustomUpdater(action=changeser_actions_l[-1], trigger=hoomd.trigger.Periodic(dt_try_change, phase=i)) ]
 
                 for i,active_serial in enumerate(active_serials_l):
                     if model=='HPS_cp':
                         bath_actions_l += [ phospho.ReservoirExchange(active_serials=active_serial, ser_serials=ser_serials, forces=[yukawa, ashbaugh, cationpi_lj], 
-                                            glb_changes=changes, temp=temp, Dmu=float(Dmu_array[i]), box_size=box_length, bath_dist=bath_dist) ]
+                                            glb_changes=changes, temp=temp, Dmu=float(Dmu_array[i]), box_size=box_size, bath_dist=bath_dist) ]
                     else:
                         bath_actions_l += [ phospho.ReservoirExchange(active_serials=active_serial, ser_serials=ser_serials, forces=[yukawa, ashbaugh], 
-                                            glb_changes=changes, temp=temp, Dmu=float(Dmu_array[i]), box_size=box_length, bath_dist=bath_dist) ]
+                                            glb_changes=changes, temp=temp, Dmu=float(Dmu_array[i]), box_size=box_size, bath_dist=bath_dist) ]
                     bath_updaters_l += [ hoomd.update.CustomUpdater(action=bath_actions_l[-1], trigger=hoomd.trigger.Periodic(dt_bath, phase=i)) ]
             
                 changes_action = phospho.ChangesBackUp(glb_changes=changes, logfile=logfile)
