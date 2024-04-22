@@ -16,7 +16,7 @@ if __name__=='__main__':
     parser.add_argument('-r', '--rescale', default=0, type=float, help='Scale down rigid body interaction by X percentage. To use also in create_initial_configuration mode to incude the rescaled rigid body types (value of argmuent not important in this case).')
     parser.add_argument('-br', '--boxresize', default=None, nargs=3, type=float, help='The simulation will be used to resize the box from the initial configuration to the sizes given in the argument. The argument should be a list with the side lengths (Lx, Ly, Lz).')
     
-    parser.add_argument('--mode', default='relax', type=str, choices=['relax', 'ness', 'nophospho'], help='Default phosphorzlation is active without exchange SER/SEP with the chemical bath. If ness also exchange step is added. If nophospho phosphorzlation and exchange are deactivated.' )
+    parser.add_argument('--mode', default='relax', type=str, choices=['relax', 'ness', 'nophospho'], help='Default phosphorylation is active without exchange SER/SEP with the chemical bath. If ness also exchange step is added. If nophospho phosphorzlation and exchange are deactivated.' )
     
     args = parser.parse_args()
 

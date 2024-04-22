@@ -560,26 +560,21 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
     temp = production_T * 0.00831446                  # Temp is RT [kJ/mol]
     box_length = int(macro_dict['box_length'])
     start = int(macro_dict['start'])	                           # 0 -> new simulation, 1 -> restart
-    contact_dist = float(macro_dict['contact_dist'])
+    
     seed = int(macro_dict['seed'])
     # Logging time interval
     dt_dump = int(macro_dict['dt_dump'])
     dt_log = int(macro_dict['dt_log'])
     dt_backup = int(macro_dict['dt_backup'])
-    dt_try_change = int(macro_dict['dt_try_change'])
     dt_time = int(macro_dict['dt_time'])
-    dt_active_ser = int(macro_dict['dt_active_ser'])
+    
     # Files
-    stat_file = macro_dict['stat_file']
     file_start = macro_dict['file_start']
     logfile = macro_dict['logfile']
-    sysfile = macro_dict['sysfile']
     # Backend
     dev = macro_dict['dev']
     logging_level = macro_dict['logging']
     logging.basicConfig(level=logging_level)
-    # initialize contacts list
-    contacts = []
     
     logging.debug(f"INPUT : macro_dict: {macro_dict}")
 
@@ -642,6 +637,7 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
     # active site
     active_serials_l = phospho.activesites_from_syslist(syslist, chain_lengths_l, n_rigids_l)
     logging.debug(f"ACTIVE SITES : active_serials list: {active_serials_l}")
+
     
     # groups
     all_group = hoomd.filter.All()
@@ -726,72 +722,78 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
     time_action = hu.PrintTimestep(time_start, production_steps)
     time_writer = hoomd.write.CustomWriter(action=time_action, trigger=hoomd.trigger.Periodic(dt_time))
     
-    if mode == 'nophospho':
-        detector_actions_l = []
-        detector_updaters_l = []
-        for i,active_serial in enumerate(active_serials_l):
-            detector_actions_l += [ phospho.ContactDetector(active_serials=active_serial, ser_serials=ser_serials, glb_contacts=contacts,
-                                        box_size=box_length, contact_dist=contact_dist) ]
-            detector_updaters_l += [ hoomd.update.CustomUpdater(action=detector_actions_l[-1], trigger=hoomd.trigger.Periodic(dt_try_change)) ]
-            
-    else:
-        changeser_actions_l = []
-        changeser_updaters_l = []
-        Dmu_array = list(macro_dict['Dmu'])
-        if len(Dmu_array) != len(active_serials_l):
-            print('ERROR: parameter Dmu in input file must have a number of input equal to the number of enzymes present in the simulation! ')
-            exit()
+    # ### if there are no active sites, we don't need to check distances or have phosphorylations
+    if len(active_serials_l)!=0:
+        contact_dist = float(macro_dict['contact_dist'])
+        dt_try_change = int(macro_dict['dt_try_change'])
+        contacts = []               # initialize contacts list
 
-        if mode == 'relax':
+        if mode == 'nophospho':
+            detector_actions_l = []
+            detector_updaters_l = []
             for i,active_serial in enumerate(active_serials_l):
-                if model=='HPS_cp':
-                    changeser_actions_l += [ phospho.ChangeSerine(active_serials=active_serial, ser_serials=ser_serials, forces=[yukawa, ashbaugh, cationpi_lj], 
-                                             glb_contacts=contacts, temp=temp, Dmu=float(Dmu_array[i]), box_size=box_length, contact_dist=contact_dist, enzyme_ind=i) ]
-                else:
-                    changeser_actions_l += [ phospho.ChangeSerine(active_serials=active_serial, ser_serials=ser_serials, forces=[yukawa, ashbaugh], 
-                                             glb_contacts=contacts, temp=temp, Dmu=float(Dmu_array[i]), box_size=box_length, contact_dist=contact_dist, enzyme_ind=i) ]
-                changeser_updaters_l += [ hoomd.update.CustomUpdater(action=changeser_actions_l[-1], trigger=hoomd.trigger.Periodic(dt_try_change, phase=i)) ]
+                detector_actions_l += [ phospho.ContactDetector(active_serials=active_serial, ser_serials=ser_serials, glb_contacts=contacts,
+                                            box_size=box_length, contact_dist=contact_dist) ]
+                detector_updaters_l += [ hoomd.update.CustomUpdater(action=detector_actions_l[-1], trigger=hoomd.trigger.Periodic(dt_try_change)) ]
                 
-        if mode == 'ness':
-            bath_dist = float(macro_dict['bath_dist'])
-            dt_bath = int(macro_dict['dt_bath'])
-            changes = []
-            bath_actions_l = []
-            bath_updaters_l = []
+        else:
+            changeser_actions_l = []
+            changeser_updaters_l = []
+            Dmu_array = list(macro_dict['Dmu'])
+            if len(Dmu_array) != len(active_serials_l):
+                print('ERROR: parameter Dmu in input file must have a number of input equal to the number of enzymes present in the simulation! ')
+                exit()
 
-            for i,active_serial in enumerate(active_serials_l):
-                if model=='HPS_cp':
-                    changeser_actions_l += [ phospho.ChangeSerineNESS(active_serials=active_serial, ser_serials=ser_serials, forces=[yukawa, ashbaugh, cationpi_lj], 
-                                        glb_contacts=contacts, glb_changes=changes, temp=temp, Dmu=float(Dmu_array[i]), box_size=box_length, contact_dist=contact_dist) ]
-                else:
-                    changeser_actions_l += [ phospho.ChangeSerineNESS(active_serials=active_serial, ser_serials=ser_serials, forces=[yukawa, ashbaugh], 
-                                        glb_contacts=contacts, glb_changes=changes, temp=temp, Dmu=float(Dmu_array[i]), box_size=box_length, contact_dist=contact_dist) ]
-                changeser_updaters_l += [ hoomd.update.CustomUpdater(action=changeser_actions_l[-1], trigger=hoomd.trigger.Periodic(dt_try_change, phase=i)) ]
+            if mode == 'relax':
+                for i,active_serial in enumerate(active_serials_l):
+                    if model=='HPS_cp':
+                        changeser_actions_l += [ phospho.ChangeSerine(active_serials=active_serial, ser_serials=ser_serials, forces=[yukawa, ashbaugh, cationpi_lj], 
+                                                glb_contacts=contacts, temp=temp, Dmu=float(Dmu_array[i]), box_size=box_length, contact_dist=contact_dist, enzyme_ind=i) ]
+                    else:
+                        changeser_actions_l += [ phospho.ChangeSerine(active_serials=active_serial, ser_serials=ser_serials, forces=[yukawa, ashbaugh], 
+                                                glb_contacts=contacts, temp=temp, Dmu=float(Dmu_array[i]), box_size=box_length, contact_dist=contact_dist, enzyme_ind=i) ]
+                    changeser_updaters_l += [ hoomd.update.CustomUpdater(action=changeser_actions_l[-1], trigger=hoomd.trigger.Periodic(dt_try_change, phase=i)) ]
+                    
+            if mode == 'ness':
+                bath_dist = float(macro_dict['bath_dist'])
+                dt_bath = int(macro_dict['dt_bath'])
+                changes = []
+                bath_actions_l = []
+                bath_updaters_l = []
 
-            for i,active_serial in enumerate(active_serials_l):
-                if model=='HPS_cp':
-                    bath_actions_l += [ phospho.ReservoirExchange(active_serials=active_serial, ser_serials=ser_serials, forces=[yukawa, ashbaugh, cationpi_lj], 
-                                        glb_changes=changes, temp=temp, Dmu=float(Dmu_array[i]), box_size=box_length, bath_dist=bath_dist) ]
-                else:
-                    bath_actions_l += [ phospho.ReservoirExchange(active_serials=active_serial, ser_serials=ser_serials, forces=[yukawa, ashbaugh], 
-                                        glb_changes=changes, temp=temp, Dmu=float(Dmu_array[i]), box_size=box_length, bath_dist=bath_dist) ]
-                bath_updaters_l += [ hoomd.update.CustomUpdater(action=bath_actions_l[-1], trigger=hoomd.trigger.Periodic(dt_bath, phase=i)) ]
+                for i,active_serial in enumerate(active_serials_l):
+                    if model=='HPS_cp':
+                        changeser_actions_l += [ phospho.ChangeSerineNESS(active_serials=active_serial, ser_serials=ser_serials, forces=[yukawa, ashbaugh, cationpi_lj], 
+                                            glb_contacts=contacts, glb_changes=changes, temp=temp, Dmu=float(Dmu_array[i]), box_size=box_length, contact_dist=contact_dist) ]
+                    else:
+                        changeser_actions_l += [ phospho.ChangeSerineNESS(active_serials=active_serial, ser_serials=ser_serials, forces=[yukawa, ashbaugh], 
+                                            glb_contacts=contacts, glb_changes=changes, temp=temp, Dmu=float(Dmu_array[i]), box_size=box_length, contact_dist=contact_dist) ]
+                    changeser_updaters_l += [ hoomd.update.CustomUpdater(action=changeser_actions_l[-1], trigger=hoomd.trigger.Periodic(dt_try_change, phase=i)) ]
+
+                for i,active_serial in enumerate(active_serials_l):
+                    if model=='HPS_cp':
+                        bath_actions_l += [ phospho.ReservoirExchange(active_serials=active_serial, ser_serials=ser_serials, forces=[yukawa, ashbaugh, cationpi_lj], 
+                                            glb_changes=changes, temp=temp, Dmu=float(Dmu_array[i]), box_size=box_length, bath_dist=bath_dist) ]
+                    else:
+                        bath_actions_l += [ phospho.ReservoirExchange(active_serials=active_serial, ser_serials=ser_serials, forces=[yukawa, ashbaugh], 
+                                            glb_changes=changes, temp=temp, Dmu=float(Dmu_array[i]), box_size=box_length, bath_dist=bath_dist) ]
+                    bath_updaters_l += [ hoomd.update.CustomUpdater(action=bath_actions_l[-1], trigger=hoomd.trigger.Periodic(dt_bath, phase=i)) ]
+            
+                changes_action = phospho.ChangesBackUp(glb_changes=changes, logfile=logfile)
+                changes_bckp_writer = hoomd.write.CustomWriter(action=changes_action, trigger=hoomd.trigger.Periodic(int(dt_backup/2)))
         
-            changes_action = phospho.ChangesBackUp(glb_changes=changes, logfile=logfile)
-            changes_bckp_writer = hoomd.write.CustomWriter(action=changes_action, trigger=hoomd.trigger.Periodic(int(dt_backup/2)))
-    
-    contacts_action = phospho.ContactsBackUp(glb_contacts=contacts, logfile=logfile)
-    contacts_bckp_writer = hoomd.write.CustomWriter(action=contacts_action, trigger=hoomd.trigger.Periodic(int(dt_backup/2)))
+        contacts_action = phospho.ContactsBackUp(glb_contacts=contacts, logfile=logfile)
+        contacts_bckp_writer = hoomd.write.CustomWriter(action=contacts_action, trigger=hoomd.trigger.Periodic(int(dt_backup/2)))
     
     # # Box resize
     if resize != None:
-	ramp = hoomd.variant.Ramp(A=0, B=1, t_start=init_step, t_ramp=production_steps-init_step)
-	initial_box = sim.state.box
-	final_box = hoomd.Box(Lx=resize[0], Ly=resize[1], Lz=resize[2])
-	box_resize_trigger = hoomd.trigger.Periodic(10)
-	box_resize = hoomd.update.BoxResize(box1=initial_box, box2=final_box, variant=ramp, trigger=box_resize_trigger)
+        ramp = hoomd.variant.Ramp(A=0, B=1, t_start=init_step, t_ramp=production_steps-init_step)
+        initial_box = sim.state.box
+        final_box = hoomd.Box(Lx=resize[0], Ly=resize[1], Lz=resize[2])
+        box_resize_trigger = hoomd.trigger.Periodic(10)
+        box_resize = hoomd.update.BoxResize(box1=initial_box, box2=final_box, variant=ramp, trigger=box_resize_trigger)
 
-	sim.operations.updaters.append(box_resize)
+        sim.operations.updaters.append(box_resize)
 
     # ## SET SIMULATION OPERATIONS
     sim.operations.integrator = integrator 
@@ -802,40 +804,44 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
     sim.operations.writers.append(backup2_gsd)
     sim.operations.writers.append(tq_gsd)
     sim.operations += time_writer
-    if mode == 'nophospho':
-        for i in range(len(active_serials_l)):
-            sim.operations += detector_updaters_l[i]
-    else:    
-        for i in range(len(active_serials_l)):
-            sim.operations += changeser_updaters_l[i]
-        if mode == 'ness':
+    if len(active_serials_l)!=0:
+        if mode == 'nophospho':
             for i in range(len(active_serials_l)):
-                sim.operations += bath_updaters_l[i]
-            sim.operations += changes_bckp_writer
-    sim.operations += contacts_bckp_writer
+                sim.operations += detector_updaters_l[i]
+        else:    
+            for i in range(len(active_serials_l)):
+                sim.operations += changeser_updaters_l[i]
+            if mode == 'ness':
+                for i in range(len(active_serials_l)):
+                    sim.operations += bath_updaters_l[i]
+                sim.operations += changes_bckp_writer
+        sim.operations += contacts_bckp_writer
     
     sim.run(production_steps-init_step)
 
-    if start==1 and len(contacts)!=0:
-        cont_prev = np.loadtxt(logfile+"_contacts.txt")
-        if len(cont_prev)!=0:
-            if cont_prev.ndim==1:
-                cont_prev = [cont_prev]
-            contacts = np.append(cont_prev, contacts, axis=0)
-        np.savetxt(logfile+"_contacts.txt", contacts, fmt='%f', header="# timestep    SER index    acc    distance     dU  \n# acc= {0->phospho rejected, 1->phospho accepted, 2->dephospho rejected, -1->dephospho accepted} ")
-    elif start==0:
-        np.savetxt(logfile+"_contacts.txt", contacts, fmt='%f', header="# timestep    SER index    acc    distance     dU  \n# acc= {0->phospho rejected, 1->phospho accepted, 2->dephospho rejected, -1->dephospho accepted} ")
-    
-    if mode == 'ness':
-        if start==1 and len(changes)!=0:
-            cont_prev = np.loadtxt(logfile+"_changes.txt")
+    # ## save contacts list
+    if len(active_serials_l)!=0:
+
+        if start==1 and len(contacts)!=0:
+            cont_prev = np.loadtxt(logfile+"_contacts.txt")
             if len(cont_prev)!=0:
                 if cont_prev.ndim==1:
                     cont_prev = [cont_prev]
-                changes = np.append(cont_prev, changes, axis=0)
-            np.savetxt(logfile+"_changes.txt", changes, fmt='%f', header="# timestep    SER index    acc    distance     dU  \n# acc= {1->phosphorylation, 10->change SER with SEP, -1->dephospho accepted, -10->change SEP with SER} ")
+                contacts = np.append(cont_prev, contacts, axis=0)
+            np.savetxt(logfile+"_contacts.txt", contacts, fmt='%f', header="# timestep    SER index    acc    distance     dU  \n# acc= {0->phospho rejected, 1->phospho accepted, 2->dephospho rejected, -1->dephospho accepted} ")
         elif start==0:
-            np.savetxt(logfile+"_changes.txt", changes, fmt='%f', header="# timestep    SER index    acc    distance     dU  \n# acc= {1->phosphorylation, 10->change SER with SEP, -1->dephospho accepted, -10->change SEP with SER} ")
+            np.savetxt(logfile+"_contacts.txt", contacts, fmt='%f', header="# timestep    SER index    acc    distance     dU  \n# acc= {0->phospho rejected, 1->phospho accepted, 2->dephospho rejected, -1->dephospho accepted} ")
+        
+        if mode == 'ness':
+            if start==1 and len(changes)!=0:
+                cont_prev = np.loadtxt(logfile+"_changes.txt")
+                if len(cont_prev)!=0:
+                    if cont_prev.ndim==1:
+                        cont_prev = [cont_prev]
+                    changes = np.append(cont_prev, changes, axis=0)
+                np.savetxt(logfile+"_changes.txt", changes, fmt='%f', header="# timestep    SER index    acc    distance     dU  \n# acc= {1->phosphorylation, 10->change SER with SEP, -1->dephospho accepted, -10->change SEP with SER} ")
+            elif start==0:
+                np.savetxt(logfile+"_changes.txt", changes, fmt='%f', header="# timestep    SER index    acc    distance     dU  \n# acc= {1->phosphorylation, 10->change SER with SEP, -1->dephospho accepted, -10->change SEP with SER} ")
     
     hoomd.write.GSD.write(state=sim.state, filename=logfile+'_end.gsd')
 
