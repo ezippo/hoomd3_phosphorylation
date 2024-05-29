@@ -32,6 +32,8 @@ def yukawa_pair_potential(cell, aa_type, R_type_list, aa_charge, model='HPS', re
             else:
                 yukawa.params[(atom1,atom2)] = dict(epsilon=aa_charge[i]*aa_charge[j]*1.73136, kappa=1.0)
                 yukawa.r_cut[(atom1,atom2)] = 3.5
+            if aa_charge[i]==0 or aa_charge[j]==0:
+                yukawa.r_cut[(atom1,atom2)] = 0.0
             logging.debug(f"INTERACTIONS : yukawa {atom1}-{atom2}")
         # interactions IDP-globular
         if rescale!=0:
@@ -42,6 +44,8 @@ def yukawa_pair_potential(cell, aa_type, R_type_list, aa_charge, model='HPS', re
                 else:
                     yukawa.params[(atom1,atom2)] = dict(epsilon=aa_charge[i]*aa_charge[j]*1.73136, kappa=1.0)
                     yukawa.r_cut[(atom1,atom2)] = 3.5
+                if aa_charge[i]==0 or aa_charge[j]==0:
+                    yukawa.r_cut[(atom1,atom2)] = 0.0
                 logging.debug(f"INTERACTIONS : yukawa {atom1}-{atom2}")
         # interactions IDP-R particles : no interactions with fictious particles
         for j,atom2 in enumerate(R_type_list):             
@@ -60,6 +64,8 @@ def yukawa_pair_potential(cell, aa_type, R_type_list, aa_charge, model='HPS', re
                 else:
                     yukawa.params[(atom1,atom2)] = dict(epsilon=aa_charge[i]*aa_charge[j]*1.73136, kappa=1.0)
                     yukawa.r_cut[(atom1,atom2)] = 3.5
+                if aa_charge[i]==0 or aa_charge[j]==0:
+                    yukawa.r_cut[(atom1,atom2)] = 0.0
                 logging.debug(f"INTERACTIONS : yukawa {atom1}-{atom2}")
             # interactions globular-R particles : no interactions with fictious particles
             for j,atom2 in enumerate(R_type_list):             
