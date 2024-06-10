@@ -746,7 +746,9 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
         else:
             changeser_actions_l = []
             changeser_updaters_l = []
-            Dmu_array = list(macro_dict['Dmu'])
+            Dmu_array = macro_dict['Dmu']
+            if isinstance(Dmu_array, str):
+                Dmu_array = [Dmu_array]
             if len(Dmu_array) != len(active_serials_l):
                 print('ERROR: parameter Dmu in input file must have a number of input equal to the number of enzymes present in the simulation! ')
                 exit()
