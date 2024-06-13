@@ -1,2 +1,0 @@
-# mol	pdb			                N   rigid   		active_sites	phospho_sites
-easy	tests/create_conf_develop/easy_ck1delta.pdb		    2	1-20		147,148,149		0
