@@ -2,7 +2,8 @@
 production_dt   0.01       # Time step for production run in picoseconds
 production_steps 	1000000	    # Total number of steps 
 production_T    300         # Temperature for production run in Kelvin
-box_lenght  50
+ionic  0.150        # ionic strength mol/L (M)
+box  50
 start   0	   # 0 -> new simulation, 1 -> restart
 contact_dist  1.0
 Dmu  -48.0     # mu_adp - mu_atp in cells
@@ -14,7 +15,6 @@ dt_log  50000
 dt_backup   50000
 dt_try_change    200 
 dt_time 100000
-dt_active_ser 2000
 
 # Files
 stat_file   input_stats/stats_module.dat

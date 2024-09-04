@@ -18,8 +18,9 @@ import hps_phosphorylation.phosphorylation as phospho
 ### -------------------------------------- PAIR POTENTIALS DEFINITION -------------------------------------------------------------
 
 ## YUKAWA: elecrostatic interaction with Debey-Huckel screening
-def yukawa_pair_potential(cell, aa_type, R_type_list, aa_charge, model='HPS', rescale=0):
+def yukawa_pair_potential(cell, aa_type, R_type_list, aa_charge, model='HPS', temp=300, ionic=0.100, rescale=0):
     yukawa = hoomd.md.pair.Yukawa(nlist=cell)
+    yukawa_eps, yukawa_kappa = hu.compute_yukawa_params(temp=temp, ionic=ionic)
     if rescale!=0:
         rigid_types = [f'{name}_r' for name in aa_type]
     for i,atom1 in enumerate(aa_type):
@@ -27,7 +28,7 @@ def yukawa_pair_potential(cell, aa_type, R_type_list, aa_charge, model='HPS', re
         for j in range(i,len(aa_type)):             
             atom2 = aa_type[j]
             if model=="CALVADOS2":
-                yukawa.params[(atom1,atom2)] = dict(epsilon=aa_charge[i]*aa_charge[j]*1.782, kappa=1.275)
+                yukawa.params[(atom1,atom2)] = dict(epsilon=aa_charge[i]*aa_charge[j]*yukawa_eps, kappa=yukawa_kappa)
                 yukawa.r_cut[(atom1,atom2)] = 4.0
             else:
                 yukawa.params[(atom1,atom2)] = dict(epsilon=aa_charge[i]*aa_charge[j]*1.73136, kappa=1.0)
@@ -39,7 +40,7 @@ def yukawa_pair_potential(cell, aa_type, R_type_list, aa_charge, model='HPS', re
         if rescale!=0:
             for j,atom2 in enumerate(rigid_types):     
                 if model=="CALVADOS2":
-                    yukawa.params[(atom1,atom2)] = dict(epsilon=aa_charge[i]*aa_charge[j]*1.782, kappa=1.275)
+                    yukawa.params[(atom1,atom2)] = dict(epsilon=aa_charge[i]*aa_charge[j]*yukawa_eps, kappa=yukawa_kappa)
                     yukawa.r_cut[(atom1,atom2)] = 4.0
                 else:
                     yukawa.params[(atom1,atom2)] = dict(epsilon=aa_charge[i]*aa_charge[j]*1.73136, kappa=1.0)
@@ -59,7 +60,7 @@ def yukawa_pair_potential(cell, aa_type, R_type_list, aa_charge, model='HPS', re
             for j in range(i,len(rigid_types)):             
                 atom2 = rigid_types[j]
                 if model=="CALVADOS2":
-                    yukawa.params[(atom1,atom2)] = dict(epsilon=aa_charge[i]*aa_charge[j]*1.782, kappa=1.275)
+                    yukawa.params[(atom1,atom2)] = dict(epsilon=aa_charge[i]*aa_charge[j]*yukawa_eps, kappa=yukawa_kappa)
                     yukawa.r_cut[(atom1,atom2)] = 4.0
                 else:
                     yukawa.params[(atom1,atom2)] = dict(epsilon=aa_charge[i]*aa_charge[j]*1.73136, kappa=1.0)
@@ -564,9 +565,13 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
     production_steps = int(macro_dict['production_steps'])                       # Total number of steps 
     production_T = float(macro_dict['production_T'])                      # Temperature for production run in Kelvin
     temp = production_T * 0.00831446                  # Temp is RT [kJ/mol]
+    ionic = float(macro_dict['ionic'])          # ionic strength [M], usually around 0.100-0.150 M
     start = int(macro_dict['start'])	                           # 0 -> new simulation, 1 -> restart
-    box_size = list(macro_dict['box'])              # box side lengths [Lx Ly Lz]
-    box_size = [ float(box_size[i]) for i in range(3) ]
+    if isinstance(macro_dict['box'], str):
+        box_size = [float(macro_dict['box'])]*3
+    else:
+        box_size = list(macro_dict['box'])              # box side lengths [Lx Ly Lz]
+        box_size = [ float(box_size[i]) for i in range(3) ]
 
     seed = int(macro_dict['seed'])
     # Logging time interval
@@ -661,7 +666,7 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
         harmonic.params['AA_bond'] = dict(k=8360, r0=0.381)
         
     # electrostatics forces
-    yukawa = yukawa_pair_potential(cell, aa_type, R_type_list, aa_charge, model, rescale)
+    yukawa = yukawa_pair_potential(cell, aa_type, R_type_list, aa_charge, temp, ionic, model, rescale)
     
     # nonbonded: ashbaugh-hatch potential
     # ashbaugh_table = ashbaugh_hatch_pair_potential(cell, aa_type, R_type_list, aa_sigma, aa_lambda, model, rescale)

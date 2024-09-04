@@ -3,49 +3,88 @@
 
 import time
 import numpy as np
-import gsd.hoomd
 import hoomd
 
 class PrintTimestep(hoomd.custom.Action):
+    """
+    A custom HOOMD action to print the elapsed time and current simulation step.
 
+    This class is used to monitor and display the progress of a simulation by
+    printing the elapsed time since the start and the current simulation timestep.
+
+    Args:
+        t_start (float): The start time in seconds (usually obtained from time.time()).
+        production_steps (int): The total number of production steps in the simulation.
+    """
     def __init__(self, t_start, production_steps):
-        self._t_start = t_start
-        self._production_steps = production_steps
+        """
+        Initialize the PrintTimestep action.
+
+        Args:
+            t_start (float): The start time in seconds.
+            production_steps (int): The total number of production steps in the simulation.
+        """
+        self._t_start = t_start  # Store the start time
+        self._production_steps = production_steps  # Store the total production steps
 
     def act(self, timestep):
+        """
+        Print the elapsed time and the current simulation timestep.
+
+        Args:
+            timestep (int): The current simulation timestep.
+        """
+        # Calculate the current elapsed time
         current_time = time.time()
         current_time = current_time - self._t_start
-        print(f"Elapsed time {current_time} | Step {timestep}/{self._production_steps} " )
+
+        # Print the elapsed time and the current simulation step
+        print(f"Elapsed time {current_time} | Step {timestep}/{self._production_steps}")
 
 
 def macros_from_infile(infile):
-    '''
-    Parameters
-    ----------
-    infile : str
-        name of macros input file.
+    """
+    Parse an input file to extract macro definitions and their associated values.
 
-    Returns
-    -------
-    macro_dict : dict
-        dict('macro name':macro value)
-    '''
+    Args:
+        infile (str): Path to the input file containing macro definitions. The file
+                      should have each macro on a new line with its values. Lines 
+                      starting with '#' are treated as comments and ignored.
+
+    Returns:
+        dict: A dictionary where the keys are macro names and the values are either
+              a single value or a list of values associated with that macro.
+    """
+    # Initialize an empty dictionary to store macro definitions
     macro_dict = {}
+    
+    # Open the input file for reading
     with open(infile, 'r') as fid:
+        # Iterate over each line in the file
         for line in fid:
+            # Skip lines that are comments (start with '#') or are empty
             if not line.startswith("#") and not line.isspace():
+                
+                # Split the line into a list of words
                 line_list = np.array(line.rsplit())
+                
+                # Find the position of any comment within the line
                 comment_pos = next((i for i, value in enumerate(line_list) if value.startswith("#")), None)
+                
                 if comment_pos is not None:
+                    # If a comment is found, only consider values before the comment
                     if comment_pos > 2:
-                        macro_dict[line_list[0]] = line_list[1:comment_pos]
+                        macro_dict[line_list[0]] = line_list[1:comment_pos]  # Store multiple values as a list
                     else:
-                        macro_dict[line_list[0]] = line_list[1]
+                        macro_dict[line_list[0]] = line_list[1]  # Store a single value
                 else:
-                    if len(line_list)>2:
-                        macro_dict[line_list[0]] = line_list[1:] 
+                    # If no comment is found, store all values associated with the macro
+                    if len(line_list) > 2:
+                        macro_dict[line_list[0]] = line_list[1:]  # Store multiple values as a list
                     else:
-                        macro_dict[line_list[0]] = line_list[1]
+                        macro_dict[line_list[0]] = line_list[1]  # Store a single value
+    
+    # Return the dictionary containing all macro definitions and their values
     return macro_dict
     
 
@@ -632,6 +671,41 @@ def reordering_index(syslist):
             reordered_list += tmp_reord_list
 
     return reordered_list
+
+def compute_yukawa_params(temp, ionic):
+    """
+    Compute the Yukawa potential parameters for a given temperature and ionic strength.
+
+    Args:
+        temp (float): The temperature in Kelvin.
+        ionic (float): The ionic strength of the solution in mol/L.
+
+    Returns:
+        tuple:
+            yukawa_eps (float): The Yukawa potential depth, representing the strength of the Yukawa interaction (in kJ/mol).
+            yukawa_kappa (float): The inverse Debye length, representing the screening effect of the ionic solution (in 1/Å).
+    """
+    # Calculate the thermal energy in kJ/mol
+    RT = 8.3145 * temp * 1e-3
+
+    # Define a lambda function to calculate the dielectric constant of water (epsw)
+    fepsw = lambda T: 5321/T + 233.76 - 0.9297*T + 0.1417*1e-2*T**2 - 0.8292*1e-6*T**3
+
+    # Calculate the dielectric constant of water at the given temperature
+    epsw = fepsw(temp)
+
+    # Calculate the Bjerrum length (lB)
+    lB = 1.6021766**2 / (4 * np.pi * 8.854188 * epsw) * 6.022 * 1000 / RT
+
+    # Calculate the inverse Debye screening length (yukawa_kappa)
+    yukawa_kappa = np.sqrt(8 * np.pi * lB * ionic * 6.022 / 10)
+
+    # Calculate the Yukawa potential depth (yukawa_eps)
+    yukawa_eps = lB * RT
+
+    # Return the Yukawa potential depth and the inverse Debye length as a tuple
+    return yukawa_eps, yukawa_kappa
+
 
 if __name__=='__main__':
     a = system_from_file('/Users/zippoema/Desktop/phd/md_simulations/git_hub/input_stats/sys_ck1d_tdp43.dat')
