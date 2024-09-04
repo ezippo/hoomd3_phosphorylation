@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import sys,os
 import time
 import math
 import logging
@@ -359,7 +358,7 @@ def create_init_configuration(filename, syslist, aa_param_dict, box_length, resc
     chain_lengths_list = []
     for mol in range(n_mols):
         mol_dict = syslist[mol]
-        chain_id, chain_mass, chain_charge, chain_sigma, chain_pos = hu.aa_stats_sequence(mol_dict['pdb'], aa_param_dict)
+        chain_id, chain_mass, chain_charge, _, _ = hu.aa_stats_sequence(mol_dict['pdb'], aa_param_dict)
         chain_length = len(chain_id)
         chain_lengths_list += [chain_length]
         chain_rel_pos = hu.chain_positions_from_pdb(mol_dict['pdb'], relto='com', chain_mass=chain_mass)   # positions relative to c.o.m. 

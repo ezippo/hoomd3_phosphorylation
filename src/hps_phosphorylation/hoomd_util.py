@@ -252,56 +252,118 @@ def system_from_file(filename):
 
 
 def read_rigid_indexes(rigid_str):
+    """
+    Parse a string defining rigid body indexes and return a list of numpy arrays
+    representing these indexes.
+
+    Args:
+        rigid_str (str): A string representing rigid body indexes. The string can be '0'
+                         to indicate no rigid bodies, or a comma-separated list of ranges
+                         (e.g., '1-3,5-7') specifying the start and end of each rigid body.
+
+    Returns:
+        list: A list of numpy arrays, where each array contains the indexes of atoms
+              belonging to a rigid body. If `rigid_str` is '0', an empty list is returned.
+    """
+    
+    # Initialize an empty list to store the rigid body indexes
     rigid_list = []
-    if rigid_str=='0':
+
+    # If the input string is '0', return an empty list (no rigid bodies)
+    if rigid_str == '0':
         return rigid_list
     else:
+        # Split the string by commas to separate the rigid body ranges
         rigid_bodies = rigid_str.rsplit(',')
+        
+        # Iterate over each range of rigid bodies
         for body in rigid_bodies:
+            # Split the range into its start and end indexes, converting them to integers
             init_body, end_body = np.array(body.rsplit('-'), dtype=int)
-            rigid_list += [ np.linspace(init_body-1, end_body-1, end_body-init_body+1, endpoint=True, dtype=int) ]
-        return rigid_list
+            
+            # Create a numpy array representing the range of indexes for this rigid body
+            # Adjusting to 0-based indexing (subtracting 1 from each index)
+            rigid_list += [np.linspace(init_body - 1, end_body - 1, end_body - init_body + 1, endpoint=True, dtype=int)]
+    
+    # Return the list of numpy arrays representing the rigid body indexes
+    return rigid_list
     
 
 def rigidbodies_from_syslist(syslist, chain_lengths_l, aa_param_dict, rescale=0):
-    
+    """
+    Generate rigid body configurations from a list of molecular systems.
+
+    Args:
+        syslist (list): A list of dictionaries where each dictionary contains information 
+                        about a molecule, including PDB data and rigid body specifications.
+        chain_lengths_l (list): A list of integers representing the length of each chain in 
+                                the system.
+        aa_param_dict (dict): A dictionary containing amino acid parameters. The keys are 
+                              amino acid types, and the values are lists containing mass, charge
+                              sigma and lambda.
+        rescale (int, optional): If non-zero, the function uses rescaled amino acid types 
+                                 for rigid body configurations. Default is 0 (no rescale).
+
+    Returns:
+        tuple: A tuple containing:
+            - rigid (hoomd.md.constrain.Rigid): A HOOMD rigid body constraint object with 
+                                                the defined rigid bodies.
+            - rigid_masses_l (list): A list of masses for each rigid body.
+            - n_rigids_l (list): A list of integers representing the number of rigid bodies 
+                                 in each molecule.
+            - R_type_list (list): A list of rigid body types generated.
+    """
+    # Number of molecules in the system
     n_mols = len(syslist)
+
+    # List of amino acid types
     aa_type = list(aa_param_dict.keys())
+    
     aa_mass = []
     aa_charge = []
     for k in aa_type:
         aa_mass.append(aa_param_dict[k][0])
         aa_charge.append(aa_param_dict[k][1])
+
+    # If rescaling is enabled, generate rescaled amino acid types
     if rescale!=0:
         aa_type_r = [f"{name}_r" for name in aa_type]
                                                             
-    prev_rigids = 0
+    prev_rigids = 0   # Counter for the number of rigid bodies generated
     rigid = hoomd.md.constrain.Rigid()
-    rigid_masses_l = []
-    n_rigids_l = []
-    R_type_list = []
+    rigid_masses_l = []     # List to store the mass of each rigid body
+    n_rigids_l = []       # List to store the number of rigid bodies in each molecule
+    R_type_list = []         # List to store the names of the rigid body types
     
+    # Loop over each molecule in the system
     for mol in range(n_mols):
         mol_dict = syslist[mol]
         chain_id = chain_id_from_pdb(mol_dict['pdb'], aa_param_dict)
-        
+
         if mol_dict['rigid']!='0':
-            chain_mass = [aa_mass[chain_id[i]] for i in range(chain_lengths_l[mol])]
-            chain_charge = [aa_charge[chain_id[i]] for i in range(chain_lengths_l[mol])]
+            chain_mass = [aa_mass[chain_id[i]] for i in range(chain_lengths_l[mol])]       # mass for each amino acid in the chain
+            chain_charge = [aa_charge[chain_id[i]] for i in range(chain_lengths_l[mol])]         # charge for each amino acid in the chain
             chain_rel_pos = chain_positions_from_pdb(mol_dict['pdb'], relto='com', chain_mass=chain_mass)   # positions relative to c.o.m. 
-            rigid_ind_l = read_rigid_indexes(mol_dict['rigid'])
-            n_rigids_l += [len(rigid_ind_l)]
+            rigid_ind_l = read_rigid_indexes(mol_dict['rigid'])       # Read the rigid body indexes
+            n_rigids_l += [len(rigid_ind_l)]     # Update the list of number of rigid bodies
             
+            # Loop over each rigid body defined in the molecule
             for nr in range(n_rigids_l[-1]):
-                rigid_mass = [chain_mass[i] for i in rigid_ind_l[nr]]
-                rigid_masses_l += [np.sum(rigid_mass)]
-                rigid_rel_pos = chain_rel_pos[rigid_ind_l[nr]] 
+                rigid_mass = [chain_mass[i] for i in rigid_ind_l[nr]]      # Get the mass of the amino acids in the rigid body
+                rigid_masses_l += [np.sum(rigid_mass)]               # Update the list of total mass of the rigid bodies
+                rigid_rel_pos = chain_rel_pos[rigid_ind_l[nr]]        # Get the relative positions of the amino acids in the rigid body
+                
+                # Calculate the center of mass position for the rigid body
                 reshaped_rigid_mass = np.reshape( rigid_mass, (len(rigid_mass),1) )
-                rigid_com_rel_pos = np.sum(rigid_rel_pos * reshaped_rigid_mass, axis=0) / np.sum(rigid_mass)       # c.o.m. relative to the center of the molecule
-                rigid_rel_pos = rigid_rel_pos-rigid_com_rel_pos             # positions of monomers of the rigid body relative to the c.o.m.
+                rigid_com_rel_pos = np.sum(rigid_rel_pos * reshaped_rigid_mass, axis=0) / np.sum(rigid_mass)       
+
+                rigid_rel_pos = rigid_rel_pos-rigid_com_rel_pos       # Adjust positions to be relative to the center of mass of the rigid body
+                
                 prev_rigids += 1
                 rig_name = 'R' + str( prev_rigids )
-                R_type_list += [rig_name]
+                R_type_list += [rig_name]   # Update list of names of the rigid body types
+
+                # Define the rigid body in HOOMD, with or without rescaling
                 if rescale==0:
                     rigid.body[rig_name] = {
                         "constituent_types": [aa_type[chain_id[i]] for i in rigid_ind_l[nr]],
@@ -319,9 +381,222 @@ def rigidbodies_from_syslist(syslist, chain_lengths_l, aa_param_dict, rescale=0)
                         "diameters": [0.0]*len(rigid_ind_l[nr])
                         }
         else:
+            # If no rigid bodies are defined, append 0 to the rigid bodies count list
             n_rigids_l += [0]
 
     return rigid, rigid_masses_l, n_rigids_l, R_type_list
+
+
+def rigid_dict_from_syslist(syslist):
+    """
+    Create a dictionary containing rigid body information for each molecule in the system.
+
+    Args:
+        syslist (list): A list of dictionaries where each dictionary contains information
+                        about a molecule, including the PDB file path, the number of chains (N),
+                        and the rigid body definition.
+
+    Returns:
+        dict: A dictionary where each key corresponds to a molecule identifier and the value is another
+              dictionary with the following keys:
+              - "n_rigids" (int): The number of rigid bodies in the molecule.
+              - "rigid_lengths" (list): A list of integers representing the lengths of each rigid body.
+              - "free_lengths" (list): A list of integers representing the lengths of free (non-rigid) segments
+                                        between rigid bodies.
+              - "n_chains" (int): The number of chains for the molecule as specified in the input.
+    """
+    n_mols = len(syslist)    # Number of molecules in the system
+    mol_keys = [syslist[mol]['mol'] for mol in range(n_mols)]     # molecule identifiers (keys) from the system list
+    rigid_dict = dict()
+
+    # Loop over each molecule in the system
+    for mol in range(n_mols):
+        key = mol_keys[mol]
+        mol_dict = syslist[mol]
+        chain_length = 0
+
+        # Calculate the length of the chain by counting lines starting with 'A' in the PDB file
+        with open(mol_dict['pdb'], 'r') as fid:
+            for line in fid:
+                if line[0]=='A':
+                    chain_length += 1
+
+        if mol_dict['rigid']=='0':
+            # If no rigid bodies, store the information with zero rigid bodies and the entire chain as free
+            rigid_dict[key] = {
+                                "n_rigids": 0, 
+                                "rigid_lengths": [], 
+                                "free_lengths": [chain_length],
+                                "n_chains": int(mol_dict['N'])
+                                }
+        else:
+            # Parse the rigid body indexes
+            rigid_ind_l = read_rigid_indexes(mol_dict['rigid'])
+            n_rigids = len(rigid_ind_l)        # counts of rigid bodies
+            rigid_lengths = [ len(rigid_ind_l[nr]) for nr in range(n_rigids) ]    # lengths of each rigid bodies
+
+            # compute lengths of free (non-rigid) segments between rigid bodies
+            free_lengths = [ rigid_ind_l[0][0] ]   # Length before the first rigid body    
+            for nr in range(n_rigids-1):
+                free_lengths += [ rigid_ind_l[nr+1][0] - rigid_ind_l[nr][-1] -1 ]
+            free_lengths += [ chain_length-1 - rigid_ind_l[-1][-1] ]    # Length after the last rigid body
+            # Store the calculated information in the dictionary
+            rigid_dict[key] = {
+                                "n_rigids": n_rigids, 
+                                "rigid_lengths": rigid_lengths, 
+                                "free_lengths": free_lengths,
+                                "n_chains": int(mol_dict['N'])
+                                }
+    return rigid_dict
+
+
+
+def _reordering_index_old(syslist):
+    """
+    Generate a reordered index list for molecules based on their rigid body and free segment structure.
+    System configuration is created following these indexing order criteria:
+    1) oreder by molecule type following the order in syslist (from sysfile)
+        within the molecule type:
+        2) virtual rigid body particles in order of appearence in the chain and non-rigid segments in order of appearence
+        3) repeat virtual rigid body particles and non-rigid segments for the number of chains of the same molecule type
+        4) all the particles beloning to the rigid bodies in order of appearence along the chain
+        5) repeat the particles beloning to the rigid bodies for the number of chains of the same molecule type
+
+    The reordered list has the indexes of the particles in the system following these order criteria:
+    1) oreder by molecule type following the order in syslist (from sysfile)
+        within the molecule type:
+        2) virtual rigid body particles first
+        3) then follows the order of appearence along the chain
+        4) repeat for the number of chains of the same molecule type
+
+    Args:
+        syslist (list): A list of dictionaries where each dictionary contains information 
+                        about a molecule, including the PDB file path, the number of chains (N),
+                        and the rigid body definition.
+
+    Returns:
+        list: A list of integers representing the reordered indices of the monomers in the system,
+              considering both rigid bodies and free segments.
+    """
+    n_mols = len(syslist)    # Number of molecules in the system
+    mol_keys = [syslist[mol]['mol'] for mol in range(n_mols)]    # molecule identifiers (keys) from the system list
+    rigid_dict = rigid_dict_from_syslist(syslist)       # Generate the rigid body information dictionary
+
+    # Initialize the reordered list and counters
+    reordered_list = []
+    n_prev_freeR = 0         # Counter for virtual rigid body particles and free (non-rigid) segments
+
+    # calculate how many particles are in system before the particles belonging to the rigid bodies (i.e. total virtual rigid body particles and free particles)
+    n_prev_rig = np.sum([ rigid_dict[key]['n_rigids']*rigid_dict[key]['n_chains'] for key in mol_keys ])      # total count of virtual rigid body particles
+    n_prev_rig += np.sum([ np.sum(rigid_dict[key]['free_lengths'])*rigid_dict[key]['n_chains'] for key in mol_keys ])   # total count of free particles
+
+    # Loop over each molecule to construct the reordered list
+    for mol in range(n_mols):
+        key = mol_keys[mol]
+        if rigid_dict[key]['n_rigids']==0:
+            # Case 1: The molecule has no rigid bodies
+            tmp_length = rigid_dict[key]['free_lengths']      # list of lengths of free segments (only one segment with length of entire chain for Case 1)
+            # Loop over the number of chains of the same species of molecule
+            for _ in range(rigid_dict[key]['n_chains']):
+                # Append indices for the entire free segment
+                reordered_list += [n_prev_freeR+i for i in range(tmp_length[0])]
+                n_prev_freeR += tmp_length[0]
+        else:
+            # Case 2: The molecule has rigid bodies
+            tmp_length_free = rigid_dict[key]['free_lengths']    # list of lengths of free segments
+            tmp_length_rig = rigid_dict[key]['rigid_lengths']    # list of lengths of rigid bodies
+            tmp_reord_list = []
+            # Loop over the number of chains of the same species of molecule
+            for _ in range(rigid_dict[key]['n_chains']):
+                # Append indices for all the virtual rigid body patricles in molecule 'key' and for the free segment before the first rigid body 
+                tmp_reord_list += [n_prev_freeR+i for i in range(rigid_dict[key]['n_rigids']+tmp_length_free[0])]
+                n_prev_freeR += rigid_dict[key]['n_rigids']+tmp_length_free[0]      
+                # Loop over the number of rigid bodies in the molecule 'key'
+                for nr in range(rigid_dict[key]['n_rigids']):
+                    tmp_reord_list += [n_prev_rig+i for i in range(tmp_length_rig[nr])]     # add indices for particles in rigid body 'nr'
+                    tmp_reord_list += [n_prev_freeR+i for i in range(tmp_length_free[nr+1])]   # add indices for free segment after rigid body 'nr'
+                    n_prev_freeR += tmp_length_free[nr+1]
+                    n_prev_rig += tmp_length_rig[nr]
+            reordered_list += tmp_reord_list
+
+    return reordered_list
+
+
+def reordering_index(syslist):
+    """
+    Generate a reordered index list for molecules based on their rigid body and free segment structure.
+    System configuration is created following these indexing order criteria:
+    1) oreder by molecule type following the order in syslist (from sysfile)
+        within the molecule type:
+        2) virtual rigid body particles in order of appearence in the chain and non-rigid segments in order of appearence
+        3) repeat virtual rigid body particles and non-rigid segments for the number of chains of the same molecule type
+        4) all the particles beloning to the rigid bodies in order of appearence along the chain
+        5) repeat the particles beloning to the rigid bodies for the number of chains of the same molecule type
+
+    The reordered list has the indexes of the particles in the system following these order criteria:
+    1) oreder by molecule type following the order in syslist (from sysfile)
+        within the molecule type:
+        2) virtual rigid body particles first
+        3) then follows the order of appearence along the chain
+        4) repeat for the number of chains of the same molecule type
+
+    Args:
+        syslist (list): A list of dictionaries where each dictionary contains information 
+                        about a molecule, including the PDB file path, the number of chains (N),
+                        and the rigid body definition.
+
+    Returns:
+        list: A list of integers representing the reordered indices of the monomers in the system,
+              considering both rigid bodies and free segments.
+    """
+
+    rigid_dict = rigid_dict_from_syslist(syslist)       # Generate the rigid body information dictionary
+
+    # Initialize the reordered list and counters
+    reordered_list = []
+    n_prev_freeR = 0         # Counter for virtual rigid body particles and free (non-rigid) segments
+    n_prev_rig = 0
+
+    # Calculate how many particles are in system before the particles belonging to the rigid bodies (i.e. total virtual rigid body particles and free particles)
+    for key in (mol['mol'] for mol in syslist):
+        mol_info = rigid_dict[key]
+        n_prev_rig += mol_info['n_rigids'] * mol_info['n_chains']          # total count of virtual rigid body particles
+        n_prev_rig += np.sum(mol_info['free_lengths']) * mol_info['n_chains']      # total count of free particles
+
+    # Loop over each molecule to construct the reordered list
+    for mol in syslist:
+        key = mol['mol']
+        mol_info = rigid_dict[key]
+
+        if mol_info['n_rigids']==0:
+            # Case 1: The molecule has no rigid bodies
+            free_length = mol_info['free_lengths'][0]        # list of lengths of free segments (only one segment with length of entire chain for Case 1)
+            # Repeat the free segment indices for each chain
+            reordered_list.extend(range(n_prev_freeR, n_prev_freeR + free_length * mol_info['n_chains']))
+            n_prev_freeR += free_length * mol_info['n_chains']    # Update counter
+        else:
+            # Case 2: The molecule has rigid bodies
+            free_lengths = mol_info['free_lengths']         # list of lengths of free segments 
+            rigid_lengths = mol_info['rigid_lengths']       # list of lengths of rigid bodies 
+
+            # Loop over the number of chains of the same species of molecule
+            for _ in range(rigid_dict[key]['n_chains']):
+                # Append indices for all the virtual rigid body patricles in molecule 'mol' and for the free segment before the first rigid body 
+                total_rigid_and_initial_free = mol_info['n_rigids'] + free_lengths[0]
+                reordered_list.extend(range(n_prev_freeR, n_prev_freeR + total_rigid_and_initial_free))
+                n_prev_freeR += total_rigid_and_initial_free         # Update counter
+    
+                # Loop over the rigid bodies in the molecule 'mol'
+                for rigid_length, next_free_length in zip(rigid_lengths, free_lengths[1:]):
+                    # Add indices for the rigid body
+                    reordered_list.extend(range(n_prev_rig, n_prev_rig + rigid_length))
+                    n_prev_rig += rigid_length       # Update counters
+                    # Add indices for the free segment after the rigid body
+                    reordered_list.extend(range(n_prev_freeR, n_prev_freeR + next_free_length))
+                    n_prev_freeR += next_free_length   # Update counters
+                    
+    return reordered_list
+
 
 
 def protein_moment_inertia(chain_rel_pos, chain_mass, chain_sigma=None):
@@ -532,6 +807,42 @@ def Flist_ashbaugh(sigma, lambda_hps, r_max, r_min=0.4, n_bins=100, epsilon=0.83
     return Flist
 
 
+
+def compute_yukawa_params(temp, ionic):
+    """
+    Compute the Yukawa potential parameters for a given temperature and ionic strength.
+
+    Args:
+        temp (float): The temperature in Kelvin.
+        ionic (float): The ionic strength of the solution in mol/L.
+
+    Returns:
+        tuple:
+            yukawa_eps (float): The Yukawa potential depth, representing the strength of the Yukawa interaction (in kJ/mol).
+            yukawa_kappa (float): The inverse Debye length, representing the screening effect of the ionic solution (in 1/Å).
+    """
+    # Calculate the thermal energy in kJ/mol
+    RT = 8.3145 * temp * 1e-3
+
+    # Define a lambda function to calculate the dielectric constant of water (epsw)
+    fepsw = lambda T: 5321/T + 233.76 - 0.9297*T + 0.1417*1e-2*T**2 - 0.8292*1e-6*T**3
+
+    # Calculate the dielectric constant of water at the given temperature
+    epsw = fepsw(temp)
+
+    # Calculate the Bjerrum length (lB)
+    lB = 1.6021766**2 / (4 * np.pi * 8.854188 * epsw) * 6.022 * 1000 / RT
+
+    # Calculate the inverse Debye screening length (yukawa_kappa)
+    yukawa_kappa = np.sqrt(8 * np.pi * lB * ionic * 6.022 / 10)
+
+    # Calculate the Yukawa potential depth (yukawa_eps)
+    yukawa_eps = lB * RT
+
+    # Return the Yukawa potential depth and the inverse Debye length as a tuple
+    return yukawa_eps, yukawa_kappa
+
+
 def compute_distances_pbc(p1, p2, x_side, y_side, z_side):
     """
     Compute the distances between two arrays of particles in a box
@@ -603,110 +914,13 @@ def compute_center(pos):
     return center_pos
 
 
-def rigid_dict_from_syslist(syslist):
-    n_mols = len(syslist)
-    mol_keys = [syslist[mol]['mol'] for mol in range(n_mols)]
-    rigid_dict = dict()
-    for mol in range(n_mols):
-        key = mol_keys[mol]
-        mol_dict = syslist[mol]
-        chain_length = 0
-        with open(mol_dict['pdb'], 'r') as fid:
-            for line in fid:
-                if line[0]=='A':
-                    chain_length += 1
 
-        if mol_dict['rigid']=='0':
-            rigid_dict[key] = {
-                                "n_rigids": 0, 
-                                "rigid_lengths": [], 
-                                "free_lengths": [chain_length],
-                                "n_chains": int(mol_dict['N'])
-                                }
-        else:
-            rigid_ind_l = read_rigid_indexes(mol_dict['rigid'])
-            n_rigids = len(rigid_ind_l)
-            rigid_lengths = [ len(rigid_ind_l[nr]) for nr in range(n_rigids) ]
-            free_lengths = [ rigid_ind_l[0][0] ]
-            for nr in range(n_rigids-1):
-                free_lengths += [ rigid_ind_l[nr+1][0] - rigid_ind_l[nr][-1] -1 ]
-            free_lengths += [ chain_length-1 - rigid_ind_l[-1][-1] ]
-            rigid_dict[key] = {
-                                "n_rigids": n_rigids, 
-                                "rigid_lengths": rigid_lengths, 
-                                "free_lengths": free_lengths,
-                                "n_chains": int(mol_dict['N'])
-                                }
-    return rigid_dict
-
-
-def reordering_index(syslist):
-    n_mols = len(syslist)
-    mol_keys = [syslist[mol]['mol'] for mol in range(n_mols)]
-    rigid_dict = rigid_dict_from_syslist(syslist)
-
-    reordered_list = []
-    n_prev_freeR = 0
-    n_prev_rig = np.sum([ rigid_dict[key]['n_rigids']*rigid_dict[key]['n_chains'] for key in mol_keys ])
-    n_prev_rig += np.sum([ np.sum(rigid_dict[key]['free_lengths'])*rigid_dict[key]['n_chains'] for key in mol_keys ])
-    for mol in range(n_mols):
-        key = mol_keys[mol]
-        if rigid_dict[key]['n_rigids']==0:
-            tmp_length = rigid_dict[key]['free_lengths']
-            for ch in range(rigid_dict[key]['n_chains']):
-                reordered_list += [n_prev_freeR+i for i in range(tmp_length[0])]
-                n_prev_freeR += tmp_length[0]
-        else:
-            tmp_length_free = rigid_dict[key]['free_lengths']
-            tmp_length_rig = rigid_dict[key]['rigid_lengths']
-            tmp_reord_list = []
-            for ch in range(rigid_dict[key]['n_chains']):
-                tmp_reord_list += [n_prev_freeR+i for i in range(rigid_dict[key]['n_rigids']+tmp_length_free[0])]
-                n_prev_freeR += rigid_dict[key]['n_rigids']+tmp_length_free[0]
-                for nr in range(rigid_dict[key]['n_rigids']):
-                    tmp_reord_list += [n_prev_rig+i for i in range(tmp_length_rig[nr])]
-                    tmp_reord_list += [n_prev_freeR+i for i in range(tmp_length_free[nr+1])]
-                    n_prev_freeR += tmp_length_free[nr+1]
-                    n_prev_rig += tmp_length_rig[nr]
-            reordered_list += tmp_reord_list
-
-    return reordered_list
-
-def compute_yukawa_params(temp, ionic):
-    """
-    Compute the Yukawa potential parameters for a given temperature and ionic strength.
-
-    Args:
-        temp (float): The temperature in Kelvin.
-        ionic (float): The ionic strength of the solution in mol/L.
-
-    Returns:
-        tuple:
-            yukawa_eps (float): The Yukawa potential depth, representing the strength of the Yukawa interaction (in kJ/mol).
-            yukawa_kappa (float): The inverse Debye length, representing the screening effect of the ionic solution (in 1/Å).
-    """
-    # Calculate the thermal energy in kJ/mol
-    RT = 8.3145 * temp * 1e-3
-
-    # Define a lambda function to calculate the dielectric constant of water (epsw)
-    fepsw = lambda T: 5321/T + 233.76 - 0.9297*T + 0.1417*1e-2*T**2 - 0.8292*1e-6*T**3
-
-    # Calculate the dielectric constant of water at the given temperature
-    epsw = fepsw(temp)
-
-    # Calculate the Bjerrum length (lB)
-    lB = 1.6021766**2 / (4 * np.pi * 8.854188 * epsw) * 6.022 * 1000 / RT
-
-    # Calculate the inverse Debye screening length (yukawa_kappa)
-    yukawa_kappa = np.sqrt(8 * np.pi * lB * ionic * 6.022 / 10)
-
-    # Calculate the Yukawa potential depth (yukawa_eps)
-    yukawa_eps = lB * RT
-
-    # Return the Yukawa potential depth and the inverse Debye length as a tuple
-    return yukawa_eps, yukawa_kappa
 
 
 if __name__=='__main__':
-    a = system_from_file('/Users/zippoema/Desktop/phd/md_simulations/git_hub/input_stats/sys_ck1d_tdp43.dat')
+    a = system_from_file('/localscratch/zippoema/git/hoomd3_phosphorylation/input_stats/sys_ck1d_ck1df_tdp43.dat')
+    l_opt = reordering_index_opt(a)
+    l = reordering_index(a)
     print(a)
+    print(l==l_opt)
+    #print(l_opt)

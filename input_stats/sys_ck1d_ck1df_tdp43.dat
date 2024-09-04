@@ -1,4 +1,4 @@
-# mol	pdb				N	rigid		active_sites		phospho_sites
-TDP43	input_stats/CA_TDP-43_261truncated.pdb	1	1-10		0			57
-CK1d    input_stats/CA_ck1delta.pdb                     2       1-200,201-292           147,148,149             0
-CK1d_f    input_stats/CA_ck1delta_full.pdb                     2       2-294           149,150,151             0
+# mol	pdb				                        N	rigid		    active_sites		phospho_sites
+TDP43	input_stats/CA_TDP-43_261truncated.pdb	10	4-10	    	0		            	SER
+CK1d    input_stats/CA_ck1delta.pdb             2   1-200,201-292   147,148,149             0
+CK1d_f    input_stats/CA_ck1delta_full.pdb      2   2-294           149,150,151             45
