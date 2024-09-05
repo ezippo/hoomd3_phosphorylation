@@ -914,13 +914,18 @@ def compute_center(pos):
     return center_pos
 
 
+def generate_positions_cubic_lattice(n_chains, box_length):
+    """Generate random positions for the chains in a cubic lattice in the simulation box."""
+    sites_per_side = math.ceil(n_chains**(1/3))
+    spacing = box_length / K
+    x = np.linspace(-box_length / 2, box_length / 2, sites_per_side, endpoint=False)
+    positions = np.array(list(itertools.product(x, repeat=3))) + [spacing / 2] * 3
+    np.random.shuffle(positions)
+    return positions[:n_chains]
+
+
 
 
 
 if __name__=='__main__':
-    a = system_from_file('/localscratch/zippoema/git/hoomd3_phosphorylation/input_stats/sys_ck1d_ck1df_tdp43.dat')
-    l_opt = reordering_index_opt(a)
-    l = reordering_index(a)
-    print(a)
-    print(l==l_opt)
-    #print(l_opt)
+    print('hello')

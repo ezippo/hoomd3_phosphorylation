@@ -2,7 +2,7 @@
 production_dt   0.01          # Time step for production run in picoseconds
 production_steps    100000	    # Total number of steps 
 production_T    300           # Temperature for production run in Kelvin
-box     100 100 100     # box side lengths x,y,z
+box     100          # box side lengths x,y,z
 start   0	   # 0 -> new simulation, 1 -> restart
 contact_dist  1.0         # distance for contact in phosphorylation step
 Dmu  -48.0  -48.0        # mu_adp - mu_atp in cells, 1 for every enzyme in simulation
@@ -17,9 +17,9 @@ dt_time 10000   	    # time interval to print out the timestep
 
 # Files
 stat_file   input_stats/stats_module.dat       # file with residue parameters definition
-file_start  simulation_200tdp43-LCD_2full-ck1d/sim_200tdp43_2full-ck1d_start.gsd   # file with starting configuration
-logfile     simulation_200tdp43-LCD_2full-ck1d/sim_200tdp43_2full-ck1d		# name of the output files (i.e. dump file will be '{logfile}_dump.gsd')
-sysfile     input_stats/sys_example_200tdp43_2full-ck1d.dat          # system file with definition of number of chains, rigid bodies, active sites and phosphosites
+file_start  example/simulation_200tdp43-LCD_2full-ck1d/sim_200tdp43_2full-ck1d_start.gsd   # file with starting configuration
+logfile     example/simulation_200tdp43-LCD_2full-ck1d/sim_200tdp43_2full-ck1d		# name of the output files (i.e. dump file will be '{logfile}_dump.gsd')
+sysfile     example/simulation_200tdp43-LCD_2full-ck1d/sys_example_200tdp43_2full-ck1d.dat          # system file with definition of number of chains, rigid bodies, active sites and phosphosites
 
 # Backend
 dev      GPU       # GPU or CPU
