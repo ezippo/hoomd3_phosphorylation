@@ -555,7 +555,7 @@ def create_init_configuration_new(filename, syslist, aa_param_dict, box_length, 
     hoomd.write.GSD.write(state=sim.state, filename=filename, mode='wb')
 
     ### ADD BONDS FREE-RIGID 
-    s1 = gsd.hoomd.open(name=filename, mode='r+')[0]
+    s1 = gsd.hoomd.open(name=filename, mode='rb+')[0]
     
     ## indexing
     reordered_ind = hu.reordering_index(syslist)
@@ -585,7 +585,7 @@ def create_init_configuration_new(filename, syslist, aa_param_dict, box_length, 
     s1.bonds.group.extend(bonds_free_rigid)
 
     print(s1.particles.N)
-    with gsd.hoomd.open(name=filename, mode='w') as fout:
+    with gsd.hoomd.open(name=filename, mode='wb') as fout:
         fout.append(s1)
         fout.close()
 
@@ -789,7 +789,7 @@ def create_init_configuration(filename, syslist, aa_param_dict, box_length, resc
     hoomd.write.GSD.write(state=sim.state, filename=filename, mode='wb')
 
     ### ADD BONDS FREE-RIGID 
-    s1 = gsd.hoomd.open(name=filename, mode='r+')[0]
+    s1 = gsd.hoomd.open(name=filename, mode='rb+')[0]
     
     ## indexing
     reordered_ind = hu.reordering_index(syslist)
@@ -820,7 +820,7 @@ def create_init_configuration(filename, syslist, aa_param_dict, box_length, resc
     s1.bonds.typeid = [0]*len(bond_pairs_tot)
     s1.bonds.group = bond_pairs_tot
     print(s1.particles.N)
-    with gsd.hoomd.open(name=filename, mode='w') as fout:
+    with gsd.hoomd.open(name=filename, mode='wb') as fout:
         fout.append(s1)
         fout.close()
 
