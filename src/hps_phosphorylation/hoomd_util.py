@@ -2,6 +2,9 @@
 # -*- coding: utf-8 -*-
 
 import time
+import math
+import itertools
+
 import numpy as np
 import hoomd
 
@@ -917,7 +920,7 @@ def compute_center(pos):
 def generate_positions_cubic_lattice(n_chains, box_length):
     """Generate random positions for the chains in a cubic lattice in the simulation box."""
     sites_per_side = math.ceil(n_chains**(1/3))
-    spacing = box_length / K
+    spacing = box_length / sites_per_side
     x = np.linspace(-box_length / 2, box_length / 2, sites_per_side, endpoint=False)
     positions = np.array(list(itertools.product(x, repeat=3))) + [spacing / 2] * 3
     np.random.shuffle(positions)
