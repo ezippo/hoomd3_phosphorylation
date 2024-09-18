@@ -1,2 +1,0 @@
-# # timestep    SER index    acc    distance     dU  
-# # acc= {0->phospho rejected, 1->phospho accepted, 2->dephospho rejected, -1->dephospho accepted} 

@@ -358,7 +358,19 @@ def phosphosites_from_syslist(syslist, type_id, chain_lengths_l, n_rigids_l):
 
 
 def activesites_from_syslist(syslist, chain_lengths_l, n_rigids_l):
-    
+    """
+    Extracts active site indices from a system list.
+
+    Processes the system list to determine the indices of active sites for each molecule.
+
+    Args:
+        syslist (list of dict): List of dictionaries, where each dictionary represents a molecule.
+        chain_lengths_l (list of int): List of chain lengths for each molecule.
+        n_rigids_l (list of int): List of rigid body counts for each molecule.
+
+    Returns:
+        list of int: List of reordered indices corresponding to active sites.
+    """
     reordered_list = hu.reordering_index(syslist)
     n_mols = len(syslist)
     activesites = []
@@ -381,6 +393,7 @@ def activesites_from_syslist(syslist, chain_lengths_l, n_rigids_l):
             activesites.extend(active_serials_per_chain)
         
         prev_res +=n_mol_chains*n_mol_residues
+        
     return activesites
         
         

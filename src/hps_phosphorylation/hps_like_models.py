@@ -682,8 +682,9 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
 
     # indexing and types
     type_id = snap.particles.typeid
+    logging.debug('AAAAAAAAAAAAAA')
     logging.debug(f"FIRST SNAPSHOT : types in snapshot: {snap.particles.types}")
-    logging.debug(f"FIRST SNAPSHOT : typeid: {snap.particles.types}")
+    logging.debug(f"FIRST SNAPSHOT : typeid: {list(type_id)}")
     
     # rigid bodies 
     rigid, rigid_masses_l, n_rigids_l, R_type_list = hu.rigidbodies_from_syslist(syslist, chain_lengths_l, aa_param_dict, rescale)
