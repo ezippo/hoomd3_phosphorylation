@@ -3,9 +3,7 @@
 
 import os
 import time
-import math
 import logging
-import itertools
 
 import numpy as np
 import hoomd
