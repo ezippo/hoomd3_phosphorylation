@@ -3,14 +3,14 @@
 Repository with code used in Zippo, E., Dormann, D., Speck, T. & Stelzl, L.L. Molecular simulations of enzymatic phosphorylation of
 disordered proteins and their condensates, *bioRxiv* (2024), doi: https://doi.org/10.1101/2024.08.15.607948 .
 
-It contains the framework to easily run coarse-grained Molecular Dynamics (MD) simulations of multi-domain proteins with phosphorylation reaction Monte Carlo steps using HPS-derived models<sup>1<sup>.
+It contains the framework to easily run coarse-grained Molecular Dynamics (MD) simulations of multi-domain proteins with phosphorylation reaction Monte Carlo steps using HPS-derived models<sup>1</sup>.
 
 ## Overview
 - **src/hps_phosphorylation/**: *hps_phosphorylation* code to run MD simulation with phosphorylation reaction.
 - **example/**: folder with examples of usage of *hps_phosphorylation*.
-- **input_stats/**: folder with pdb files, amino-acids parameters from HPS<sup>2<sup> model and CALVADOS2<sup>3<sup>, ...
+- **input_stats/**: folder with pdb files, amino-acids parameters from HPS<sup>2</sup> model and CALVADOS2<sup>3</sup>, ...
 - **main.py**: python script to run the simulations with *hps_phosphorylation*.
-- **paper/**: pdf of the paper<sup>1<sup> and jupyter notebooks for analysis and plotting used in the paper.
+- **paper/**: pdf of the paper<sup>1</sup> and jupyter notebooks for analysis and plotting used in the paper.
 
 ## *hps_phosphorylation*
 
@@ -35,6 +35,6 @@ Copy the python script *main.py* to run the code.
 ### Usage
 
 <small>1) Zippo, E., Dormann, D., Speck, T. & Stelzl, L.L. Molecular simulations of enzymatic phosphorylation of
-disordered proteins and their condensates, *bioRxiv* (2024), doi: https://doi.org/10.1101/2024.08.15.607948 <small>
-<small>2) <small>
-<small>3) <small>
+disordered proteins and their condensates, *bioRxiv* (2024), doi: https://doi.org/10.1101/2024.08.15.607948 </small>
+<small>2) </small>
+<small>3) </small>
