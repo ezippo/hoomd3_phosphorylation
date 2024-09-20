@@ -69,7 +69,7 @@ You can specify the input parameters and the type of simulation you want through
 **Input file**
 
 The input file has to be parsed to the script *main.py* through the flag '-i'. It contains the information on topology and parameters necessary to run the simulation.
-A template of the input file can be found in the folder *input_stats/*, or an example of input file can found in the *example/* folder.
+A template of the input file can be found in the folder *input_stats/*, or an example of input file can be found in the *example/* folder.
 A correct input file must contain the following entries: 
 1. Simulation parameters:
   - 'production_dt' = time step in ps;
@@ -97,6 +97,25 @@ A correct input file must contain the following entries:
   - 'logging' = logging level according to *logging* python standard library.
 
 **System file**
+
+The system file contains information about the topology of the system and its path has to be included in the input file under the entry 'sysfile'.
+A template of the system file can be found in the folder *input_stats/*, or an example can be found in the *example/* folder.
+The system file is structure in the following way:
+
+1. its a table in which each line contains info about one species of molecules.
+2. within a line, the entries are:
+  - 'mol': nickname of reference for the molecule species (e.g. TDP43)
+  - 'pdb': path to pdb file of the molecule species, needed for parsing sequence and positions in 'create_initial_configuration' mode
+  - 'N': number of chains of the same molecule species in the simulation box
+  - 'rigid': specify the portion of the molecule to keep fixed as a rigid body.
+            Use '0' for no-rigid bodies; specify a range from i-th to j-th residue of the sequence to keep rigid using the format 'i-j';
+            in case of multiple rigid bodies in the molecule, separate the ranges with a comma ',' (e.g. '3-80,102-140' are to rigid bodies, one from residue 3 to 80 and another from 102 to 140).
+  - 'active_sites': specify the residues to be considered active site when computing the distances in the phosphorylation step.
+            Use '0' for no active sites; specify active site residues as a list of serial numbers separated by comma (e.g. '149,150,151' means that the active site residues are residue 149,150 and 151).
+  - 'phospho_sites': specify the phosphosites (residues that can be phosphorylated) for the phosphorylation step.
+            Use '0' for no phosphosites; specify phosphosites residues as a list of serial numbers separated by comma (e.g. '6,147,150' means that residue 6,147 and 150 can be phosphorylated);
+            use 'SER' to select all the serines of the molecule; use 'SER:i-j' to select all the serines in the sequence portion between residue 'i' and residue 'j'.
+
 
 
 <small>1) Zippo, E., Dormann, D., Speck, T. & Stelzl, L.L. Molecular simulations of enzymatic phosphorylation of
