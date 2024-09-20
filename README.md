@@ -30,7 +30,9 @@ Copy the python script *main.py* to run the code.
 **Installation 2**
 
 The code is also available in PyPI-test and it can be installed by using the following command:
-  pip install -i https://test.pypi.org/simple/ hps-phosphorylation
+
+                pip install -i https://test.pypi.org/simple/ hps-phosphorylation
+
 Copy the python script *main.py* to run the code.
 
 
