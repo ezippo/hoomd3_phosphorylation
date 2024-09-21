@@ -121,7 +121,14 @@ The system file is structure in the following way:
 <small>1) Zippo, E., Dormann, D., Speck, T. & Stelzl, L.L. Molecular simulations of enzymatic phosphorylation of
 disordered proteins and their condensates, *bioRxiv* (2024), doi: https://doi.org/10.1101/2024.08.15.607948 </small>
 
-<small>2) </small>
+<small>2) Dignon, G. L., Zheng, W., Kim, Y. C., Best, R. B. & Mittal, J. Sequence determinants of
+protein phase behavior from a coarse-grained model, *PLoS Comput. Biol.* 14, e1005941 (2018) </small>
 
-<small>3) </small>
+<small>3) Tesei, G. & Lindorff-Larsen, K. Improved predictions of phase behaviour of intrinsically disordered proteins by tuning the interaction range, *Open
+Research Europe* 2 (2023) </small>
 
+<small>4) Tejedor, A. R., Garaizar, A., Ramírez, J. & Espinosa, J. R. ‘RNA modulation of transport
+properties and stability in phase-separated condensates, *Biophysical Journal* 120, 5169–5186 (2021) </small>
+
+<small>5)  Krainer, G. et al. Reentrant liquid condensate phase of proteins is stabilized by hydrophobic
+and non-ionic interactions, *Biophysical Journal* 120, 28a (2021) </small>
