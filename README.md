@@ -118,8 +118,8 @@ The system file is structure in the following way:
 
 
 
-<span style="font-size: 2px;">1) Zippo, E., Dormann, D., Speck, T. & Stelzl, L.L. Molecular simulations of enzymatic phosphorylation of
-disordered proteins and their condensates, *bioRxiv* (2024), doi: https://doi.org/10.1101/2024.08.15.607948 </span>
+<small>1) Zippo, E., Dormann, D., Speck, T. & Stelzl, L.L. Molecular simulations of enzymatic phosphorylation of
+disordered proteins and their condensates, *bioRxiv* (2024), doi: https://doi.org/10.1101/2024.08.15.607948 </small>
 
 <small>2) Dignon, G. L., Zheng, W., Kim, Y. C., Best, R. B. & Mittal, J. Sequence determinants of
 protein phase behavior from a coarse-grained model, *PLoS Comput. Biol.* 14, e1005941 (2018) </small>
