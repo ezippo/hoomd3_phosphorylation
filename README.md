@@ -3,6 +3,8 @@
 Repository with code used in Zippo, E., Dormann, D., Speck, T. & Stelzl, L.L. Molecular simulations of enzymatic phosphorylation of
 disordered proteins and their condensates, *bioRxiv* (2024), doi: https://doi.org/10.1101/2024.08.15.607948 .
 
+Supporting data can be found on the Zenodo platform (Zippo, E. (2024). Supporting Data: Molecular simulations of enzymatic phosphorylation of disordered proteins and their condensates. Zenodo. https://doi.org/10.5281/zenodo.13833526).
+
 It contains the framework to easily run coarse-grained Molecular Dynamics (MD) simulations of multi-domain proteins with phosphorylation reaction Monte Carlo steps using HPS-derived models<sup>1</sup>.
 
 ## Overview
