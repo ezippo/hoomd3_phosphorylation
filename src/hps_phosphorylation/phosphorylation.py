@@ -44,9 +44,10 @@ class ChangeSerine(hoomd.custom.Action):
         contact_dist (float): Distance threshold for a contact between the enzyme active site residues and a serine.
         enzyme_ind (int): Index of the enzyme for tracking in case of multiple enzymes.
         glb_changes (list, optional): Global list to record type change events (Ser to pSer or opposite), necessary only in simulation mode 'ness'. Default None.
-
+        displ_as_pos (ndarray, optional): Array with list of displacement vectors for each active site residue. Default None, no displacement.
+        reference_vector (ndarray, optional): Array with reference vector to compute the rotation of the rigid body with the active site. Needed in case of displacement (displ_as_pos not None). Default None.
     """
-    def __init__(self, active_serials, ser_serials, forces, glb_contacts, temp, Dmu, box_size, contact_dist, enzyme_ind, glb_changes=None):
+    def __init__(self, active_serials, ser_serials, forces, glb_contacts, temp, Dmu, box_size, contact_dist, enzyme_ind, glb_changes=None, displ_as_pos=None, reference_vector=None):
         # Initialize all instance variables
         self._active_serials = active_serials
         self._ser_serials = ser_serials
@@ -58,6 +59,8 @@ class ChangeSerine(hoomd.custom.Action):
         self._contact_dist = contact_dist
         self._enzyme_ind = enzyme_ind
         self._glb_changes = glb_changes
+        self._displ_as_pos = displ_as_pos
+        self._reference_vector = reference_vector
 
 
     def act(self, timestep):
@@ -73,6 +76,15 @@ class ChangeSerine(hoomd.custom.Action):
         snap = self._state.get_snapshot()     # Get the simulation snapshot
         positions = snap.particles.position      # Get the positions of particles
         active_pos = positions[self._active_serials]     # enzyme active site positions
+        
+        # if active sites need to be displaced
+        if self._displ_as_pos is not None and self._reference_vector is not None:
+            delta_pos_as_new = positions[self._active_serials[0]] - positions[self._active_serials[0]+1]   # compute rotated reference vector
+            R = compute_rotation_matrix(self._reference_vector, delta_pos_as_new)     # compute rotation matrix of reference vector into the rotated one
+            displ_as_new = np.dot(self._displ_as_pos, R.T)      # rotate displacements vectors
+            active_pos = active_pos + displ_as_new        # displace active sites positions
+            logging.debug(f'displaced position active sites: {active_pos}')
+            
         # Compute distance
         distances = hu.compute_distances_pbc(active_pos, positions[self._ser_serials],  self._box_size[0], self._box_size[1], self._box_size[2])
         distances = np.max(distances, axis=0)
@@ -222,15 +234,19 @@ class ContactDetector(hoomd.custom.Action):
         box_size (list of float): Size of the simulation box.
         contact_dist (float): Distance threshold for detecting contacts.
         enzyme_ind (int): Index of the enzyme.
-    """
-    def __init__(self, active_serials, ser_serials, glb_contacts, box_size, contact_dist, enzyme_ind):
+        displ_as_pos (ndarray, optional): Array with list of displacement vectors for each active site residue. Default None, no displacement.
+        reference_vector (ndarray, optional): Array with reference vector to compute the rotation of the rigid body with the active site. Needed in case of displacement (displ_as_pos not None). Default None.
+"""
+    def __init__(self, active_serials, ser_serials, glb_contacts, box_size, contact_dist, enzyme_ind, displ_as_pos=None, reference_vector=None):
         self._active_serials = active_serials
         self._ser_serials = ser_serials
         self._glb_contacts = glb_contacts
         self._box_size = box_size
         self._contact_dist = contact_dist
         self._enzyme_ind = enzyme_ind
-
+        self._displ_as_pos = displ_as_pos
+        self._reference_vector = reference_vector
+        
     def act(self, timestep):
         """
         Executes the contact detection action at a given timestep.
@@ -241,6 +257,15 @@ class ContactDetector(hoomd.custom.Action):
         snap = self._state.get_snapshot()     # get simulation state
         positions = snap.particles.position  
         active_pos = positions[self._active_serials]    # get active site positions
+        
+        # if active sites need to be displaced
+        if self._displ_as_pos is not None and self._reference_vector is not None:
+            delta_pos_as_new = positions[self._active_serials[0]] - positions[self._active_serials[0]+1]   # compute rotated reference vector
+            R = compute_rotation_matrix(self._reference_vector, delta_pos_as_new)     # compute rotation matrix of reference vector into the rotated one
+            displ_as_new = np.dot(self._displ_as_pos, R.T)      # rotate displacements vectors
+            active_pos = active_pos + displ_as_new        # displace active sites positions
+            logging.debug(f'displaced position active sites: {active_pos}')
+            
         # compute distances
         distances = hu.compute_distances_pbc(active_pos, positions[self._ser_serials], self._box_size[0], self._box_size[1], self._box_size[2])
         distances = np.max(distances, axis=0)
