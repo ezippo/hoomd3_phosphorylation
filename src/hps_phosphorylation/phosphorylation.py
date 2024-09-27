@@ -106,7 +106,6 @@ class ChangeSerine(hoomd.custom.Action):
         snap = self._state.get_snapshot()     # Get the simulation snapshot
         positions = snap.particles.position      # Get the positions of particles
         active_pos = positions[self._active_serials]     # enzyme active site positions
-        logging.debug(f'position active sites: {active_pos}')
 
         # if active sites need to be displaced
         if self._displ_as_pos is not None and self._reference_vector is not None:
@@ -114,7 +113,9 @@ class ChangeSerine(hoomd.custom.Action):
             R = compute_rotation_matrix(self._reference_vector, delta_pos_as_new)     # compute rotation matrix of reference vector into the rotated one
             displ_as_new = np.dot(self._displ_as_pos, R.T)      # rotate displacements vectors
             active_pos = active_pos + displ_as_new        # displace active sites positions
-            logging.debug(f'displaced position active sites: {active_pos}')
+            logging.debug(f'rotated reference vector: {delta_pos_as_new}')
+            logging.debug(f'rotation matrix: {R}')
+            logging.debug(f'displacement rotated: {displ_as_new}')
             
         # Compute distance
         distances = hu.compute_distances_pbc(active_pos, positions[self._ser_serials],  self._box_size[0], self._box_size[1], self._box_size[2])
@@ -288,14 +289,16 @@ class ContactDetector(hoomd.custom.Action):
         snap = self._state.get_snapshot()     # get simulation state
         positions = snap.particles.position  
         active_pos = positions[self._active_serials]    # get active site positions
-        
+
         # if active sites need to be displaced
         if self._displ_as_pos is not None and self._reference_vector is not None:
             delta_pos_as_new = positions[self._active_serials[0]] - positions[self._active_serials[0]+1]   # compute rotated reference vector
             R = compute_rotation_matrix(self._reference_vector, delta_pos_as_new)     # compute rotation matrix of reference vector into the rotated one
             displ_as_new = np.dot(self._displ_as_pos, R.T)      # rotate displacements vectors
             active_pos = active_pos + displ_as_new        # displace active sites positions
-            logging.debug(f'displaced position active sites: {active_pos}')
+            logging.debug(f'rotated reference vector: {delta_pos_as_new}')
+            logging.debug(f'rotation matrix: {R}')
+            logging.debug(f'displacement rotated: {displ_as_new}')
             
         # compute distances
         distances = hu.compute_distances_pbc(active_pos, positions[self._ser_serials], self._box_size[0], self._box_size[1], self._box_size[2])

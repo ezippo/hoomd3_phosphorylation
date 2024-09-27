@@ -706,7 +706,7 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
             if active_sites!='0':
                 active_sites_list = list(map(int, active_sites.split(',')))
                 enzyme_pos = hu.chain_positions_from_pdb(mol_dict['pdb'], unit='nm')
-                delta_com_as = enzyme_pos[active_sites_list[0]] - enzyme_pos[active_sites_list[0]+1]
+                delta_com_as = enzyme_pos[active_sites_list[0]-1] - enzyme_pos[active_sites_list[0]]
                 displ_as_pos = displ_as_pos - enzyme_pos[active_sites_list]
 
         logging.debug(f"ACTIVE SITES : displacement: {displ_as_pos}")
