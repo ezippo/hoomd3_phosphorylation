@@ -699,7 +699,7 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
 
     if displ_active_site is not None:
         displ_as_pos = np.loadtxt(displ_active_site)
-        if len(active_serials_l)!=1 or displ_pos.shape!=(len(active_serials_l[0]),3):
+        if len(active_serials_l)!=1 or displ_as_pos.shape!=(len(active_serials_l[0]),3):
             raise ValueError('displacement file wrong or too many enzymes! Only one enzyme possible if displace active site.')
         for mol in range(n_mols):
             mol_dict = syslist[mol]
