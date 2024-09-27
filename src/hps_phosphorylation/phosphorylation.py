@@ -22,6 +22,36 @@ def metropolis_boltzmann(dU, dmu, kT=2.494338):
     else:
         return False
 
+
+def compute_rotation_matrix(v1, v2):
+    # Normalize the vectors
+    v1 = v1 / np.linalg.norm(v1)
+    v2 = v2 / np.linalg.norm(v2)
+    
+    # Compute the cross product and sine of the angle
+    k = np.cross(v1, v2)
+    sin_theta = np.linalg.norm(k)
+    
+    # If the vectors are aligned, the rotation is identity
+    if sin_theta == 0:
+        return np.eye(3)
+    
+    # Normalize the cross product vector
+    k = k / sin_theta
+    
+    # Compute the dot product and cos(theta)
+    cos_theta = np.dot(v1, v2)
+    
+    # Compute the skew-symmetric matrix K
+    K = np.array([[0, -k[2], k[1]],
+                  [k[2], 0, -k[0]],
+                  [-k[1], k[0], 0]])
+    
+    # Compute the rotation matrix using Rodrigues' formula
+    R = np.eye(3) + sin_theta * K + (1 - cos_theta) * np.dot(K, K)
+    
+    return R
+
 # ### CUSTOM ACTIONS
 
 class ChangeSerine(hoomd.custom.Action):
@@ -76,7 +106,8 @@ class ChangeSerine(hoomd.custom.Action):
         snap = self._state.get_snapshot()     # Get the simulation snapshot
         positions = snap.particles.position      # Get the positions of particles
         active_pos = positions[self._active_serials]     # enzyme active site positions
-        
+        logging.debug(f'position active sites: {active_pos}')
+
         # if active sites need to be displaced
         if self._displ_as_pos is not None and self._reference_vector is not None:
             delta_pos_as_new = positions[self._active_serials[0]] - positions[self._active_serials[0]+1]   # compute rotated reference vector

@@ -680,7 +680,6 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
 
     # indexing and types
     type_id = snap.particles.typeid
-    logging.debug('AAAAAAAAAAAAAA')
     logging.debug(f"FIRST SNAPSHOT : types in snapshot: {snap.particles.types}")
     logging.debug(f"FIRST SNAPSHOT : typeid: {list(type_id)}")
     
@@ -698,17 +697,20 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
     logging.debug(f"ACTIVE SITES : active_serials list: {active_serials_l}")
 
     if displ_active_site is not None:
-        displ_as_pos = np.loadtxt(displ_active_site)
+        displ_as_pos = np.loadtxt(displ_active_site)/10.   # conversion in nm
         if len(active_serials_l)!=1 or displ_as_pos.shape!=(len(active_serials_l[0]),3):
             raise ValueError('displacement file wrong or too many enzymes! Only one enzyme possible if displace active site.')
         for mol in range(n_mols):
             mol_dict = syslist[mol]
-            if mol_dict['active_sites']!='0':
-                enzyme_pos = hu.chain_positions_from_pdb(mol_dict['pdb'], unit='nm')[active_serials_l[0,0]:active_serials_l[0,0]+1]
-                delta_pos_as = enzyme_pos[0] - enzyme_pos[1]
-                displ_as_pos = displ_as_pos - enzyme_pos[active_serials_l[0]]
+            active_sites = mol_dict['active_sites']
+            if active_sites!='0':
+                active_sites_list = list(map(int, active_sites.split(',')))
+                enzyme_pos = hu.chain_positions_from_pdb(mol_dict['pdb'], unit='nm')
+                delta_com_as = enzyme_pos[active_sites_list[0]] - enzyme_pos[active_sites_list[0]+1]
+                displ_as_pos = displ_as_pos - enzyme_pos[active_sites_list]
+
         logging.debug(f"ACTIVE SITES : displacement: {displ_as_pos}")
-        logging.debug(f"ACTIVE SITES : displacement reference vector: {delta_pos_as}")
+        logging.debug(f"ACTIVE SITES : displacement reference vector: {delta_com_as}")
     else:
         delta_com_as = None
         displ_as_pos = None
