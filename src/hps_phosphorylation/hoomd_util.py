@@ -739,12 +739,12 @@ def Flist_ashbaugh(sigma, lambda_hps, r_max, r_min=0.4, n_bins=100, epsilon=0.83
 
 
 
-def compute_yukawa_params(temp, ionic):
+def compute_yukawa_params(tempK, ionic):
     """
     Compute the Yukawa potential parameters for a given temperature and ionic strength.
 
     Args:
-        temp (float): The temperature in Kelvin.
+        tempK (float): The temperature in Kelvin.
         ionic (float): The ionic strength of the solution in mol/L.
 
     Returns:
@@ -753,13 +753,13 @@ def compute_yukawa_params(temp, ionic):
             yukawa_kappa (float): The inverse Debye length, representing the screening effect of the ionic solution (in 1/Å).
     """
     # Calculate the thermal energy in kJ/mol
-    RT = 8.3145 * temp * 1e-3
+    RT = 8.3145 * tempK * 1e-3
 
     # Define a lambda function to calculate the dielectric constant of water (epsw)
-    fepsw = lambda T: 5321/T + 233.76 - 0.9297*T + 0.1417*1e-2*T**2 - 0.8292*1e-6*T**3
+    fepsw = lambda T: 5321/T + 233.76 - 0.9297*T + 0.1417*1e-2*T*T - 0.8292*1e-6*T**3
 
     # Calculate the dielectric constant of water at the given temperature
-    epsw = fepsw(temp)
+    epsw = fepsw(tempK)
 
     # Calculate the Bjerrum length (lB)
     lB = 1.6021766**2 / (4 * np.pi * 8.854188 * epsw) * 6.022 * 1000 / RT

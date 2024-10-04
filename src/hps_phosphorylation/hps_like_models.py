@@ -16,7 +16,7 @@ import hps_phosphorylation.phosphorylation as phospho
 ### -------------------------------------- PAIR POTENTIALS DEFINITION -------------------------------------------------------------
 
 ## YUKAWA: elecrostatic interaction with Debey-Huckel screening
-def yukawa_pair_potential(cell, aa_type, R_type_list, aa_charge, model='HPS', temp=300, ionic=0.100, rescale=0):
+def yukawa_pair_potential(cell, aa_type, R_type_list, aa_charge, model='HPS', tempK=300, ionic=0.100, rescale=0):
     """
     Defines Yukawa (screened electrostatic) pair potentials between particles in a system.
     
@@ -26,7 +26,7 @@ def yukawa_pair_potential(cell, aa_type, R_type_list, aa_charge, model='HPS', te
     - R_type_list: List of virtual rigid body particle types (strings).
     - aa_charge: List of corresponding charges for amino acid types.
     - model: String specifying which model to use for interaction parameters ('HPS' or 'CALVADOS2').
-    - temp: Temperature of the system in Kelvin (used for calculating screening parameters).
+    - tempK: Temperature of the system in Kelvin (used for calculating screening parameters).
     - ionic: Ionic strength of the solution in mol/L (M) (used for Debye-Hückel screening).
     - rescale: Percentage value for rescaling globular particles (default 0).
     
@@ -36,7 +36,7 @@ def yukawa_pair_potential(cell, aa_type, R_type_list, aa_charge, model='HPS', te
     yukawa = hoomd.md.pair.Yukawa(nlist=cell)     # Yukawa interaction object using the provided neighbor list (cell)
 
     if model == "CALVADOS2":
-        yukawa_eps, yukawa_kappa = hu.compute_yukawa_params(temp=temp, ionic=ionic)    # Yukawa potential parameters based on temperature and ionic strength
+        yukawa_eps, yukawa_kappa = hu.compute_yukawa_params(tempK=tempK, ionic=ionic)    # Yukawa potential parameters based on temperature and ionic strength
         r_cutoff = 4.0
     else:
         yukawa_eps, yukawa_kappa = 1.73136, 1.0    # HPS model parameters (temp=300K, ionic=0.100M)
@@ -731,7 +731,7 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
         harmonic.params['AA_bond'] = dict(k=8360, r0=0.381)
         
     # electrostatics forces
-    yukawa = yukawa_pair_potential(cell, aa_type, R_type_list, aa_charge, model, temp, ionic, rescale)
+    yukawa = yukawa_pair_potential(cell, aa_type, R_type_list, aa_charge, model, production_T, ionic, rescale)
     
     # nonbonded: ashbaugh-hatch potential
     # ashbaugh_table = ashbaugh_hatch_pair_potential(cell, aa_type, R_type_list, aa_sigma, aa_lambda, model, rescale)
