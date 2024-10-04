@@ -696,25 +696,6 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
     active_serials_l = phospho.activesites_from_syslist(syslist, chain_lengths_l, n_rigids_l)
     logging.debug(f"ACTIVE SITES : active_serials list: {active_serials_l}")
 
-    if displ_active_site is not None:
-        displ_as_pos = np.loadtxt(displ_active_site)/10.   # conversion in nm
-        if len(active_serials_l)!=1 or displ_as_pos.shape!=(len(active_serials_l[0]),3):
-            raise ValueError('displacement file wrong or too many enzymes! Only one enzyme possible if displace active site.')
-        for mol in range(n_mols):
-            mol_dict = syslist[mol]
-            active_sites = mol_dict['active_sites']
-            if active_sites!='0':
-                active_sites_list = list(map(int, active_sites.split(',')))
-                enzyme_pos = hu.chain_positions_from_pdb(mol_dict['pdb'], unit='nm')
-                delta_com_as = enzyme_pos[active_sites_list[0]-1] - enzyme_pos[active_sites_list[0]]
-                displ_as_pos = displ_as_pos - enzyme_pos[active_sites_list]
-
-        logging.debug(f"ACTIVE SITES : displacement: {displ_as_pos}")
-        logging.debug(f"ACTIVE SITES : displacement reference vector: {delta_com_as}")
-    else:
-        delta_com_as = None
-        displ_as_pos = None
-    
     # groups
     all_group = hoomd.filter.All()
     moving_group = hoomd.filter.Rigid(("center", "free"))
@@ -811,7 +792,7 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
             detector_updaters_l = []
             for i,active_serial in enumerate(active_serials_l):
                 detector_actions_l += [ phospho.ContactDetector(active_serials=active_serial, ser_serials=ser_serials, glb_contacts=contacts,
-                                            box_size=box_size, contact_dist=contact_dist, enzyme_ind=i, displ_as_pos=displ_as_pos, reference_vector=delta_com_as) ]
+                                            box_size=box_size, contact_dist=contact_dist, enzyme_ind=i) ]
                 detector_updaters_l += [ hoomd.update.CustomUpdater(action=detector_actions_l[-1], trigger=hoomd.trigger.Periodic(dt_try_change)) ]
 
         # if mode is not 'nophospho', create actions for phosphorylation/dephosphorylation in MD simulations    
@@ -851,7 +832,7 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
             for i,active_serial in enumerate(active_serials_l):
                 changeser_actions_l += [ phospho.ChangeSerine(active_serials=active_serial, ser_serials=ser_serials, forces=forces_list, 
                                             glb_contacts=contacts, temp=temp, Dmu=float(Dmu_array[i]), box_size=box_size, contact_dist=contact_dist, enzyme_ind=i, 
-                                            glb_changes=changes, displ_as_pos=displ_as_pos, reference_vector=delta_com_as) ]
+                                            glb_changes=changes) ]
                 changeser_updaters_l += [ hoomd.update.CustomUpdater(action=changeser_actions_l[-1], trigger=hoomd.trigger.Periodic(dt_try_change, phase=i)) ]
 
         # backup action    
