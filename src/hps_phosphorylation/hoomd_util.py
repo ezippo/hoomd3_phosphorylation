@@ -750,7 +750,7 @@ def compute_yukawa_params(tempK, ionic):
     Returns:
         tuple:
             yukawa_eps (float): The Yukawa potential depth, representing the strength of the Yukawa interaction (in kJ/mol).
-            yukawa_kappa (float): The inverse Debye length, representing the screening effect of the ionic solution (in 1/Å).
+            yukawa_kappa (float): The inverse Debye length, representing the screening effect of the ionic solution (in 1/nm).
     """
     # Calculate the thermal energy in kJ/mol
     RT = 8.3145 * tempK * 1e-3
