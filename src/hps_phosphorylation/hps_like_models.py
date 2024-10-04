@@ -36,7 +36,7 @@ def yukawa_pair_potential(cell, aa_type, R_type_list, aa_charge, model='HPS', te
     yukawa = hoomd.md.pair.Yukawa(nlist=cell)     # Yukawa interaction object using the provided neighbor list (cell)
 
     if model == "CALVADOS2":
-        yukawa_eps, yukawa_kappa = compute_yukawa_params(temp=temp, ionic=ionic)    # Yukawa potential parameters based on temperature and ionic strength
+        yukawa_eps, yukawa_kappa = hu.compute_yukawa_params(temp=temp, ionic=ionic)    # Yukawa potential parameters based on temperature and ionic strength
         r_cutoff = 4.0
     else:
         yukawa_eps, yukawa_kappa = 1.73136, 1.0    # HPS model parameters (temp=300K, ionic=0.100M)
@@ -731,7 +731,7 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
         harmonic.params['AA_bond'] = dict(k=8360, r0=0.381)
         
     # electrostatics forces
-    yukawa = yukawa_pair_potential(cell, aa_type, R_type_list, aa_charge, temp, ionic, model, rescale)
+    yukawa = yukawa_pair_potential(cell, aa_type, R_type_list, aa_charge, model, temp, ionic, rescale)
     
     # nonbonded: ashbaugh-hatch potential
     # ashbaugh_table = ashbaugh_hatch_pair_potential(cell, aa_type, R_type_list, aa_sigma, aa_lambda, model, rescale)
