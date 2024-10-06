@@ -33,5 +33,5 @@ if __name__=='__main__':
     # simulation mode
     else:
         hps.simulate_hps_like(macro_dict=macro_dict, aa_param_dict=aa_param_dict, syslist=syslist, model=args.model, 
-                              rescale=args.rescale, mode=args.mode, resize=args.boxresize, displ_active_site=args.displactivesite)
+                              rescale=args.rescale, mode=args.mode, resize=args.boxresize)
         
