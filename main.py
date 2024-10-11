@@ -31,10 +31,10 @@ if __name__=='__main__':
         # only cubic box are available for creating the initial configuration, the box can be resized during the simulation using the flag -br. Give only one number in the input "box".
         box_length = float( macro_dict['box'] )
         if args.network:
-            hps.create_init_configuration_network(filename=macro_dict['logfile']+'_start.gsd', syslist=syslist, aa_param_dict=aa_param_dict, 
+            hps.create_init_configuration_network(filename=macro_dict['file_start'], syslist=syslist, aa_param_dict=aa_param_dict, 
                                         box_length=box_length, rescale=bool(args.rescale)) 
         else:
-            hps.create_init_configuration(filename=macro_dict['logfile']+'_start.gsd', syslist=syslist, aa_param_dict=aa_param_dict, 
+            hps.create_init_configuration(filename=macro_dict['file_start'], syslist=syslist, aa_param_dict=aa_param_dict, 
                                         box_length=box_length, rescale=bool(args.rescale)) 
     # simulation mode
     else:
