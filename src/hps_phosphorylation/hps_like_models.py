@@ -791,8 +791,6 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
         sim.create_state_from_snapshot(snapshot=snap)
     # if start==1, continue previous simulation
     elif start==1:
-        if not os.path.exists(logfile+'_contacts.txt'):
-            raise FileExistsError(f"Error: contacts files does not exist yet. Create an empty one, correct filename or set start to 0 to start a new simulation.")
         sim.create_state_from_gsd(filename=file_start)
         snap = sim.state.get_snapshot()
     init_step = sim.initial_timestep
@@ -905,6 +903,9 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
     
     # ### if there are no active sites, we don't need to check distances or have phosphorylations
     if len(active_serials_l)!=0:
+        if start==1 and not os.path.exists(logfile+'_contacts.txt'):
+            raise FileExistsError(f"Error: contacts files does not exist yet. Create an empty one, correct filename or set start to 0 to start a new simulation.")
+        
         contact_dist = float(macro_dict['contact_dist'])
         dt_try_change = int(macro_dict['dt_try_change'])
         contacts = []               # initialize contacts list
