@@ -16,7 +16,7 @@ if __name__=='__main__':
 
     parser.add_argument('-n', '--network', type=str, help='The folded domains will be fixed using elastic network instead of rigid bodies, as modelled in CALVADOS3. Give in input the name of the file in which the network distances will be written.')
 
-    parser.add_argument('--mode', default='relax', type=str, choices=['relax', 'ness', 'nophospho'], help='Default phosphorylation is active without exchange SER/SEP with the chemical bath. If ness also exchange step is added. If nophospho phosphorzlation and exchange are deactivated.' )
+    parser.add_argument('--mode', default='relax', type=str, choices=['relax', 'ness', 'nophospho'], help='Default phosphorylation is active without exchange SER/SEP with the chemical bath. If ness also exchange step is added. If nophospho phosphorylation and exchange are deactivated.' )
     
     args = parser.parse_args()
 
