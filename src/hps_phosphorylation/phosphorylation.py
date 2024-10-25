@@ -343,8 +343,8 @@ def phosphosites_from_syslist(syslist, type_id, chain_lengths_l, n_rigids_l):
                     # turn to False the elements of mask outside the range 'start-end'
                     chain_start = nc * (n_rigids_l[mol] + chain_lengths_l[mol])
                     chain_end = chain_start + (n_rigids_l[mol] + chain_lengths_l[mol])
-                    tmp_mask[chain_start:chain_start + start_ser_ind] = False
-                    tmp_mask[chain_start + end_ser_ind + 1:chain_end] = False
+                    tmp_mask[chain_start:chain_start + n_rigids_l[mol] + start_ser_ind] = False
+                    tmp_mask[chain_start + n_rigids_l[mol] + end_ser_ind + 1:chain_end] = False
             elif len(ser_specific) != 1:
                 raise ValueError(f"phospho-sites are not correctly specified in molecule {mol_dict['mol']}")
 
