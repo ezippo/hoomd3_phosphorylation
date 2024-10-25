@@ -635,6 +635,7 @@ def create_init_configuration_network(filename, network_file, syslist, aa_param_
     network_distances = []
     chain_lengths_list = []
     bond_id = []
+    network_id = []
     network_bond_names = []
     network_pairs = []
     bond_pairs=[]
@@ -673,7 +674,7 @@ def create_init_configuration_network(filename, network_file, syslist, aa_param_
                                 network_distances.append(network[i,j])
                             network_pairs.append([n_prev_res+i_chain*chain_length + rigid_ind[i], n_prev_res+i_chain*chain_length + rigid_ind[j]])
 
-            bond_id.extend([n_prev_network+1+i for i in range(bond_num)]*n_mol_chains)
+            network_id.extend([n_prev_network+1+i for i in range(bond_num)]*n_mol_chains)
             n_prev_network += bond_num
 
         s.particles.N += n_mol_chains*chain_length
@@ -690,6 +691,7 @@ def create_init_configuration_network(filename, network_file, syslist, aa_param_
         bond_pairs.extend(normal_bonds)
                 
     bond_pairs.extend(network_pairs)
+    bond_id.extend(network_id)
     s.bonds.N += len(bond_pairs)
     s.bonds.types += network_bond_names
     s.bonds.typeid += bond_id
