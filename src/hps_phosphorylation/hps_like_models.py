@@ -588,7 +588,7 @@ def create_init_configuration(filename, syslist, aa_param_dict, box_length, resc
 
 
 
-def create_init_configuration_network(filename, network_file, syslist, aa_param_dict, box_length, rescale=0):
+def create_init_configuration_network(filename, syslist, aa_param_dict, box_length, rescale=0):
     """
     Create an initial configuration for a HOOMD simulation and save it to a GSD file.
     
@@ -632,10 +632,10 @@ def create_init_configuration_network(filename, network_file, syslist, aa_param_
     n_prev_mol = 0
     n_prev_res = 0
     n_prev_network = 0
+    counts_network = 0
     network_distances = []
     chain_lengths_list = []
     bond_id = []
-    network_id = []
     network_bond_names = []
     network_pairs = []
     bond_pairs=[]
@@ -674,7 +674,7 @@ def create_init_configuration_network(filename, network_file, syslist, aa_param_
                                 network_distances.append(network[i,j])
                             network_pairs.append([n_prev_res+i_chain*chain_length + rigid_ind[i], n_prev_res+i_chain*chain_length + rigid_ind[j]])
 
-            network_id.extend([n_prev_network+1+i for i in range(bond_num)]*n_mol_chains)
+            bond_id.extend([n_prev_network+1+i for i in range(bond_num)]*n_mol_chains)
             n_prev_network += bond_num
 
         s.particles.N += n_mol_chains*chain_length
@@ -691,7 +691,6 @@ def create_init_configuration_network(filename, network_file, syslist, aa_param_
         bond_pairs.extend(normal_bonds)
                 
     bond_pairs.extend(network_pairs)
-    bond_id.extend(network_id)
     s.bonds.N += len(bond_pairs)
     s.bonds.types += network_bond_names
     s.bonds.typeid += bond_id
@@ -703,13 +702,13 @@ def create_init_configuration_network(filename, network_file, syslist, aa_param_
         fout.append(s)
         fout.close()
 
-    np.savetxt(network_file, network_distances)
+    np.savetxt('network_distances.dat', network_distances)
     
 
 
 ### --------------------------------- SIMULATION MODE ------------------------------------------------
 
-def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0, mode='relax', resize=None, network=None):
+def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0, mode='relax', resize=None, network=False):
     # UNITS: distance -> nm   (!!!positions and sigma in files are in agstrom!!!)
     #        mass -> amu
     #        energy -> kJ/mol
@@ -828,8 +827,8 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
         harmonic.params['AA_bond'] = dict(k=8033, r0=0.381)
     else:
         harmonic.params['AA_bond'] = dict(k=8360, r0=0.381)
-    if network is not None:
-        network_distances = np.loadtxt(network)
+    if network:
+        network_distances = np.loadtxt('network_distances.dat')
         for i in range(len(network_distances)):
             harmonic.params[f'net{i+1}'] = dict(k=700, r0=network_distances[i])
         
