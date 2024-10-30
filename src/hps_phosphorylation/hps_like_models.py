@@ -587,128 +587,9 @@ def create_init_configuration(filename, syslist, aa_param_dict, box_length, resc
         fout.close()
 
 
-
-def create_init_configuration_network(filename, syslist, aa_param_dict, box_length, rescale=0):
-    """
-    Create an initial configuration for a HOOMD simulation and save it to a GSD file.
-    
-    Parameters:
-    - filename: str, path to the output GSD file
-    - syslist: list of dicts, each dict contains molecular data
-    - aa_param_dict: dict, amino acid parameters
-    - box_length: float, length of the cubic simulation box
-    - rescale: percentage of rescaling to use for folded domain interactions, here necessary to create rescaled amino acid types (default 0, no rescaled types)
-    """
-    from sklearn.neighbors import radius_neighbors_graph
-
-    n_mols = len(syslist)
-    n_chains = np.sum([int(syslist[i]['N']) for i in range(n_mols)])
-    aa_type = list(aa_param_dict.keys())
-    
-    ## initialize first snapshot
-    s=gsd.hoomd.Frame()
-    s.configuration.dimensions = 3
-    s.configuration.box = [box_length,box_length,box_length,0,0,0] 
-    s.configuration.step = 0
-    s.particles.N = 0
-    s.particles.types = []
-    s.particles.types += aa_type
-    s.particles.typeid = []
-    s.particles.mass = []
-    s.particles.charge = []
-    s.particles.position = []
-    s.particles.moment_inertia = [] 
-    s.particles.orientation = []
-    #s.particles.body = []
-    s.bonds.N = 0
-    s.bonds.types = ['AA_bond']
-    s.bonds.typeid = []
-    s.bonds.group = []
-
-    ## create array of c.o.m positions for all the molecules
-    positions = hu.generate_positions_cubic_lattice(n_chains, box_length)
-    
-    ### LOOP ON THE MOLECULES TYPE
-    n_prev_mol = 0
-    n_prev_res = 0
-    n_prev_network = 0
-    counts_network = 0
-    network_distances = []
-    chain_lengths_list = []
-    bond_id = []
-    network_bond_names = []
-    network_pairs = []
-    bond_pairs=[]
-    for mol in range(n_mols):
-        mol_dict = syslist[mol]
-        chain_id, chain_mass, chain_charge, _, _ = hu.aa_stats_sequence(mol_dict['pdb'], aa_param_dict)
-        chain_length = len(chain_id)
-        chain_lengths_list += [chain_length]
-        chain_rel_pos = hu.chain_positions_from_pdb(mol_dict['pdb'], relto='com', chain_mass=chain_mass)   # positions relative to c.o.m. 
-        n_mol_chains = int(mol_dict['N'])
-            
-        mol_pos = []
-        normal_bonds = []
-        for i_chain in range(n_mol_chains):
-            mol_pos += list(chain_rel_pos+positions[n_prev_mol+i_chain])
-            normal_bonds += [[n_prev_res + i+i_chain*chain_length, n_prev_res + i+1+i_chain*chain_length] for i in range(chain_length-1)]
-        bond_id.extend([0]*len(normal_bonds))
-        
-        # elastic network
-        bond_num = 0
-        if mol_dict['rigid']!='0':
-            rigid_ind_l = hu.read_rigid_indexes(mol_dict['rigid'])
-            n_rigids = len(rigid_ind_l)
-
-            # loop on the rigid bodies of the same molecule
-            for r in range(n_rigids):
-                rigid_ind = rigid_ind_l[r]
-                rigid_rel_pos = chain_rel_pos[rigid_ind] 
-                network = radius_neighbors_graph(rigid_rel_pos, radius=0.9, mode='distance')
-                for i_chain in range(n_mol_chains):
-                    for i, j in zip(network.tocoo().row, network.tocoo().col):
-                        if i<j:
-                            if i_chain==0:
-                                bond_num += 1
-                                network_bond_names.append(f'net{n_prev_network+bond_num}')
-                                network_distances.append(network[i,j])
-                            network_pairs.append([n_prev_res+i_chain*chain_length + rigid_ind[i], n_prev_res+i_chain*chain_length + rigid_ind[j]])
-
-            bond_id.extend([n_prev_network+1+i for i in range(bond_num)]*n_mol_chains)
-            n_prev_network += bond_num
-
-        s.particles.N += n_mol_chains*chain_length
-        s.particles.typeid += n_mol_chains*chain_id
-        s.particles.mass += n_mol_chains*chain_mass
-        s.particles.charge += n_mol_chains*chain_charge
-        s.particles.position +=  mol_pos
-        s.particles.moment_inertia += [[0,0,0]]*chain_length*n_mol_chains
-        s.particles.orientation += [(1, 0, 0, 0)]*chain_length*n_mol_chains
-
-        n_prev_res += chain_length*n_mol_chains
-        n_prev_mol += n_mol_chains
-        
-        bond_pairs.extend(normal_bonds)
-                
-    bond_pairs.extend(network_pairs)
-    s.bonds.N += len(bond_pairs)
-    s.bonds.types += network_bond_names
-    s.bonds.typeid += bond_id
-    s.bonds.group += bond_pairs
-    print(len(bond_pairs))
-    print(len(bond_id))
-
-    with gsd.hoomd.open(name=filename, mode='wb') as fout:
-        fout.append(s)
-        fout.close()
-
-    np.savetxt('network_distances.dat', network_distances)
-    
-
-
 ### --------------------------------- SIMULATION MODE ------------------------------------------------
 
-def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0, mode='relax', resize=None, network=False):
+def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0, mode='relax', resize=None, displ_active_site=None):
     # UNITS: distance -> nm   (!!!positions and sigma in files are in agstrom!!!)
     #        mass -> amu
     #        energy -> kJ/mol
@@ -827,10 +708,6 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
         harmonic.params['AA_bond'] = dict(k=8033, r0=0.381)
     else:
         harmonic.params['AA_bond'] = dict(k=8360, r0=0.381)
-    if network:
-        network_distances = np.loadtxt('network_distances.dat')
-        for i in range(len(network_distances)):
-            harmonic.params[f'net{i+1}'] = dict(k=700, r0=network_distances[i])
         
     # electrostatics forces
     yukawa = yukawa_pair_potential(cell, aa_type, R_type_list, aa_charge, model, production_T, ionic, rescale)
