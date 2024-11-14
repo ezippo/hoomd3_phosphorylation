@@ -9,10 +9,11 @@ if __name__=='__main__':
     parser = argparse.ArgumentParser(description='MD simulation in HOOMD3 using HPS-like models')
     group_mode = parser.add_mutually_exclusive_group(required=True)
     group_mode.add_argument('-c', '--create_conf', action='store_true', help='The code will run in the create_initial_configuration mode. Only cubic box are available for creating the initial configuration, the box can be resized during the simulation using the flag -br. Give only one number in the input "box". ')
-    group_mode.add_argument('-m', '--model', type=str, choices=['HPS', 'HPS_cp', 'CALVADOS2'], help='The code will run in simulation mode. The argument of this flag must be the name of the coarse-grained model to use in the simulation.')
+    group_mode.add_argument('-m', '--model', type=str, choices=['HPS', 'CALVADOS'], help='The code will run in simulation mode. The argument of this flag must be the name of the coarse-grained model to use in the simulation.')
     parser.add_argument('-i','--infile', required=True, type=str, help='Input file with simulation parameters, logging file name and parameters, system file name.')
     parser.add_argument('-r', '--rescale', default=0, type=float, help='Scale down rigid body interaction by X percentage. To use also in create_initial_configuration mode to incude the rescaled rigid body types (value of argmuent not important in this case).')
     parser.add_argument('-br', '--boxresize', default=None, nargs=3, type=float, help='The simulation will be used to resize the box from the initial configuration to the sizes given in the argument. The argument should be a list with the side lengths (Lx, Ly, Lz).')
+    parser.add_argument('-cp', '--cationpi', action='store_true', help='If specified, an additional Lennard-Jones pair potential will be added between cationic and aromatic residues.')
 
     parser.add_argument('-n', '--network', type=str, help='The folded domains will be fixed using elastic network instead of rigid bodies, as modelled in CALVADOS3. Give in input the name of the file in which the network distances will be written.')
 
@@ -38,6 +39,6 @@ if __name__=='__main__':
                                         box_length=box_length, rescale=bool(args.rescale)) 
     # simulation mode
     else:
-        hps.simulate_hps_like(macro_dict=macro_dict, aa_param_dict=aa_param_dict, syslist=syslist, model=args.model, 
-                              rescale=args.rescale, mode=args.mode, resize=args.boxresize, network=args.network)
+        hps.simulate_hps_like(macro_dict=macro_dict, aa_param_dict=aa_param_dict, syslist=syslist, model=args.model, rescale=args.rescale, 
+                            cationpi=args.cationpi, mode=args.mode, resize=args.boxresize, network=args.network)
         
