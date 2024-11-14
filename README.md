@@ -63,10 +63,19 @@ You can specify the input parameters and the type of simulation you want through
   -br BOXRESIZE BOXRESIZE BOXRESIZE, --boxresize BOXRESIZE BOXRESIZE BOXRESIZE  :  
                         The simulation will be used to resize the box from the initial configuration to the sizes given in the
                         argument. The argument should be a list with the side lengths (Lx, Ly, Lz).
+
+  -cp, --cationpi  :  If specified, an additional Lennard-Jones pair potential will be added between cationic and aromatic residues.
+
+  -n, NETWORK, --network NETWORK :
+                        The folded domains will be fixed using elastic network instead of rigid bodies, as modelled in CALVADOS3. 
+                        Give in input NETWORK the name of the file in which the network distances will be written in 'create_initial_configuration' mode,
+                        or in which the network distances have to be read from in simulation mode.
+
                         
   --mode {relax,ness,nophospho}  :  
                         Default 'relax', phosphorylation is active without exchange SER/SEP with the chemical bath. If 'ness' also exchange
                         step is added. If 'nophospho' phosphorylation and exchange are deactivated.
+                        
 
 **Input file**
 
