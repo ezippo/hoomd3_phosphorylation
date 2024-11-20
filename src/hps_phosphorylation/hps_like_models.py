@@ -62,11 +62,12 @@ def yukawa_pair_potential(cell, aa_type, R_type_list, aa_charge, model='HPS', te
         for atom1, charge1 in zip(types1, charges1):
             for atom2, charge2 in zip(types2, charges2):
                 epsilon = charge1 * charge2 * epsilon_factor
-                if charge1 == 0 or charge2 == 0:   # If either charge is zero, set the cutoff distance to 0 (no interaction) to speed up simulation
-                    r_cut = 0.0
                 yukawa.params[(atom1, atom2)] = dict(epsilon=epsilon, kappa=kappa)
-                yukawa.r_cut[(atom1, atom2)] = r_cut
-                logging.debug(f"INTERACTIONS : yukawa {atom1}-{atom2}")
+                if charge1 == 0 or charge2 == 0:   # If either charge is zero, set the cutoff distance to 0 (no interaction) to speed up simulation
+                    yukawa.r_cut[(atom1, atom2)] = 0
+                else:
+                    yukawa.r_cut[(atom1, atom2)] = r_cut
+                logging.debug(f"INTERACTIONS : yukawa {atom1}-{atom2} : {yukawa.params[(atom1, atom2)]}")
 
     # IDP-IDP interactions
     pairwise_interactions(aa_type, aa_type, aa_charge, aa_charge, 
@@ -143,7 +144,7 @@ def ashbaugh_hatch_pair_potential(cell, aa_type, R_type_list, aa_sigma, aa_lambd
                 # Set Ashbaugh pair potential parameters
                 ashbaugh.params[(atom1, atom2)] = dict(epsilon=epsilon, sigma=sigma, lam=lam)
                 ashbaugh.r_cut[(atom1, atom2)] = r_cut
-                logging.debug(f"INTERACTIONS: ashbaugh-hatch {atom1}-{atom2}")
+                logging.debug(f"INTERACTIONS: ashbaugh-hatch {atom1}-{atom2} : {ashbaugh.params[(atom1, atom2)]}")
 
     # IDP-IDP interactions
     pairwise_interactions(aa_type, aa_type, aa_sigma, aa_sigma, aa_lambda, aa_lambda)
@@ -222,7 +223,7 @@ def cation_pi_lj_potential(cell, aa_type, R_type_list, aa_sigma, rescale=0):
                 else:
                     cation_pi_lj.params[(atom1, atom2)] = dict(epsilon=0, sigma=0)
                     cation_pi_lj.r_cut[(atom1, atom2)] = 0
-                logging.debug(f"INTERACTIONS: cation-pi {atom1}-{atom2}")
+                logging.debug(f"INTERACTIONS: cation-pi {atom1}-{atom2} : {cation_pi_lj.params[(atom1, atom2)]}")
 
     # IDP-IDP interactions
     pairwise_interactions(aa_type, aa_type, aa_sigma, aa_sigma)
