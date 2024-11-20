@@ -588,6 +588,163 @@ def create_init_configuration(filename, syslist, aa_param_dict, box_length, resc
         fout.close()
 
 
+def create_init_configuration_network(filename, network_file, syslist, aa_param_dict, box_length, rescale=0):
+    """
+    Create an initial configuration for a HOOMD simulation and save it to a GSD file.
+    
+    Parameters:
+    - filename: str, path to the output GSD file
+    - syslist: list of dicts, each dict contains molecular data
+    - aa_param_dict: dict, amino acid parameters
+    - box_length: float, length of the cubic simulation box
+    - rescale: percentage of rescaling to use for folded domain interactions, here necessary to create rescaled amino acid types (default 0, no rescaled types)
+    """
+    from sklearn.neighbors import radius_neighbors_graph
+
+    n_mols = len(syslist)
+    n_chains = np.sum([int(syslist[i]['N']) for i in range(n_mols)])
+    aa_type = list(aa_param_dict.keys())
+    
+    ## initialize first snapshot
+    s=gsd.hoomd.Frame()
+    s.configuration.dimensions = 3
+    s.configuration.box = [box_length,box_length,box_length,0,0,0] 
+    s.configuration.step = 0
+    s.particles.N = 0
+    s.particles.types = []
+    s.particles.types += aa_type
+    s.particles.typeid = []
+    s.particles.mass = []
+    s.particles.charge = []
+    s.particles.position = []
+    s.particles.moment_inertia = [] 
+    s.particles.orientation = []
+    #s.particles.body = []
+    s.bonds.N = 0
+    s.bonds.types = ['AA_bond']
+    s.bonds.typeid = []
+    s.bonds.group = []
+
+    ## create array of c.o.m positions for all the molecules
+    positions = hu.generate_positions_cubic_lattice(n_chains, box_length)
+    
+    ### LOOP ON THE MOLECULES TYPE
+    n_prev_mol = 0
+    n_prev_res = 0
+    network_distances = []
+    foldbond_distances = []
+    chain_lengths_list = []
+    network_id = []
+    foldbond_id = []
+    network_names = []
+    foldbond_names = []
+    network_pairs = []
+    IDRbond_pairs = []
+    foldbond_pairs = []
+    foldbond_count = 0
+    network_count = 0
+    for mol in range(n_mols):
+        mol_dict = syslist[mol]
+        chain_id, chain_mass, chain_charge, _, _ = hu.aa_stats_sequence(mol_dict['pdb'], aa_param_dict)
+        chain_length = len(chain_id)
+        chain_lengths_list += [chain_length]
+        chain_rel_pos = hu.chain_positions_from_pdb(mol_dict['pdb'], relto='com', chain_mass=chain_mass)   # positions relative to c.o.m. 
+        n_mol_chains = int(mol_dict['N'])
+            
+        mol_pos = np.concatenate([list(chain_rel_pos+positions[n_prev_mol+i_chain]) for i_chain in range(n_mol_chains)])
+
+        # elastic network
+        tmp_network_id = []
+        tmp_network_pairs = []
+        tmp_foldbond_id = []
+        tmp_foldbond_pairs = []
+        tmp_IDRbond_pairs = []
+        if mol_dict['rigid']!='0':
+            rigid_ind_l = hu.read_rigid_indexes(mol_dict['rigid'])
+            n_rigids = len(rigid_ind_l)
+            rigid_indices = np.concatenate(rigid_ind_l)
+
+            for i in range(chain_length-1):
+                if i in rigid_indices or i+1 in rigid_indices:
+                    foldbond_count += 1
+                    foldbond_names.append(f'bond{foldbond_count}')
+                    foldbond_distances.append(np.sqrt(np.sum((chain_rel_pos[i]-chain_rel_pos[i+1])**2)))
+                    tmp_foldbond_id.append(foldbond_count)
+                    tmp_foldbond_pairs.append([n_prev_res+i, n_prev_res+i+1])
+                else:
+                    tmp_IDRbond_pairs.append([n_prev_res+i, n_prev_res+i+1])
+            tmp_foldbond_id *= n_mol_chains
+            tmp_foldbond_pairs = [ list( np.array(pair)+i_chain*chain_length ) for i_chain in range(n_mol_chains) for pair in tmp_foldbond_pairs ]
+            tmp_IDRbond_pairs = [ list( np.array(pair)+i_chain*chain_length ) for i_chain in range(n_mol_chains) for pair in tmp_IDRbond_pairs ]
+        
+            # loop on the rigid bodies of the same molecule
+            for r in range(n_rigids):
+                rigid_ind = rigid_ind_l[r]
+                rigid_rel_pos = chain_rel_pos[rigid_ind] 
+                network = radius_neighbors_graph(rigid_rel_pos, radius=0.9, mode='distance')
+                for i, j in zip(network.tocoo().row, network.tocoo().col):
+                    if i<j-1:
+                        network_count += 1
+                        network_names.append(f'net{network_count}')
+                        network_distances.append(network[i,j])
+                        tmp_network_id.append(network_count)
+                        tmp_network_pairs.append([n_prev_res+rigid_ind[i], n_prev_res+rigid_ind[j]])
+                tmp_network_id *= n_mol_chains
+                tmp_network_pairs = [ list( np.array(pair)+i_chain*chain_length ) for i_chain in range(n_mol_chains) for pair in tmp_network_pairs ]
+
+        else:
+            for i_chain in range(n_mol_chains):
+                tmp_IDRbond_pairs += [[n_prev_res + i+i_chain*chain_length, n_prev_res + i+1+i_chain*chain_length] for i in range(chain_length-1)]
+
+        s.particles.N += n_mol_chains*chain_length
+        s.particles.typeid += n_mol_chains*chain_id
+        s.particles.mass += n_mol_chains*chain_mass
+        s.particles.charge += n_mol_chains*chain_charge
+        s.particles.position +=  list(mol_pos)
+        s.particles.moment_inertia += [[0,0,0]]*chain_length*n_mol_chains
+        s.particles.orientation += [(1, 0, 0, 0)]*chain_length*n_mol_chains
+
+        n_prev_res += chain_length*n_mol_chains
+        n_prev_mol += n_mol_chains
+
+        IDRbond_pairs.extend(tmp_IDRbond_pairs)
+        foldbond_pairs.extend(tmp_foldbond_pairs)
+        network_pairs.extend(tmp_network_pairs)
+
+        foldbond_id.extend(tmp_foldbond_id)
+        network_id.extend(tmp_network_id)
+        
+                
+    bond_pairs = []
+    bond_pairs.extend(IDRbond_pairs)
+    bond_pairs.extend(foldbond_pairs)
+    bond_pairs.extend(network_pairs)
+
+    bond_id = [0]*len(IDRbond_pairs)
+    bond_id.extend(foldbond_id)
+    network_id = list( np.array(network_id)+len(foldbond_names) )
+    bond_id.extend(network_id)
+
+    s.bonds.N += len(bond_pairs)
+    s.bonds.types += foldbond_names+network_names
+    s.bonds.typeid += bond_id
+    s.bonds.group += bond_pairs
+    print(len(bond_id))
+
+    with gsd.hoomd.open(name=filename, mode='wb') as fout:
+        fout.append(s)
+        fout.close()
+
+    foldbond_distances.extend(network_distances)
+    foldbond_names.extend(network_names)
+    if len(foldbond_names) == len(foldbond_distances):
+        with open(network_file, "w") as file:
+            for name, distance in zip(foldbond_names, foldbond_distances):
+                file.write(f"{name}  {distance}\n")
+    else:
+        raise IndexError("Error: newtork bond names and network bond distances must be of the same length.")
+
+
 ### --------------------------------- SIMULATION MODE ------------------------------------------------
 
 def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0, mode='relax', resize=None, displ_active_site=None):
@@ -709,6 +866,27 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
         harmonic.params['AA_bond'] = dict(k=8033, r0=0.381)
     else:
         harmonic.params['AA_bond'] = dict(k=8360, r0=0.381)
+
+    if network is not None:
+        foldbond_names = []
+        foldbond_distances = []
+        network_names = []
+        network_distances = []
+        with open(network, "r") as file:
+            for line in file:
+                net_name, net_distance = line.split()
+                if net_name.startswith("bond"):
+                    foldbond_names.append(net_name)
+                    foldbond_distances.append(float(net_distance))
+                elif net_name.startswith("net"):
+                    network_names.append(net_name)
+                    network_distances.append(float(net_distance))
+                else:
+                    raise OSError("Corrupted input file for network distances: names of network bonds do not conform to the code notation. ")
+        for net_name, net_distance in zip(foldbond_names, foldbond_distances):
+            harmonic.params[net_name] = dict(k=8033, r0=net_distance)
+        for net_name, net_distance in zip(network_names, network_distances):
+            harmonic.params[net_name] = dict(k=700, r0=net_distance)
         
     # electrostatics forces
     yukawa = yukawa_pair_potential(cell, aa_type, R_type_list, aa_charge, model, production_T, ionic, rescale)
