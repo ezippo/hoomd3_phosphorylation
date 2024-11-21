@@ -17,7 +17,8 @@ if __name__=='__main__':
     parser.add_argument('-n', '--network', type=str, help='The folded domains will be fixed using elastic network instead of rigid bodies, as modelled in CALVADOS3. Give in input the name of the file in which the network distances will be written.')
 
     parser.add_argument('--mode', default='relax', type=str, choices=['relax', 'ness', 'nophospho'], help='Default phosphorylation is active without exchange SER/SEP with the chemical bath. If ness also exchange step is added. If nophospho phosphorylation and exchange are deactivated.' )
-    
+    parser.add_argument('--logenergy', action='store_true', help='If specified, the log file will store also the potential energy acting on each particle for each pair potential.')
+
     args = parser.parse_args()
 
     ## READ INPUT FILE
@@ -40,5 +41,5 @@ if __name__=='__main__':
     # simulation mode
     else:
         hps.simulate_hps_like(macro_dict=macro_dict, aa_param_dict=aa_param_dict, syslist=syslist, model=args.model, rescale=args.rescale, 
-                            cationpi=args.cationpi, mode=args.mode, resize=args.boxresize, network=args.network)
+                            cationpi=args.cationpi, mode=args.mode, resize=args.boxresize, network=args.network, logenergy=args.logenergy)
         
