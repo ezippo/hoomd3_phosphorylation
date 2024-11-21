@@ -69,6 +69,7 @@ def yukawa_pair_potential(cell, aa_type, R_type_list, aa_charge, model='HPS', te
                     yukawa.r_cut[(atom1, atom2)] = r_cut
                 logging.debug(f"INTERACTIONS : yukawa {atom1}-{atom2} : {yukawa.params[(atom1, atom2)]}, r_cut={yukawa.r_cut[(atom1, atom2)]}")
 
+
     # IDP-IDP interactions
     pairwise_interactions(aa_type, aa_type, aa_charge, aa_charge, 
         yukawa_eps, yukawa_kappa, r_cutoff )
@@ -145,6 +146,7 @@ def ashbaugh_hatch_pair_potential(cell, aa_type, R_type_list, aa_sigma, aa_lambd
                 ashbaugh.params[(atom1, atom2)] = dict(epsilon=epsilon, sigma=sigma, lam=lam)
                 ashbaugh.r_cut[(atom1, atom2)] = r_cut
                 logging.debug(f"INTERACTIONS: ashbaugh-hatch {atom1}-{atom2} : {ashbaugh.params[(atom1, atom2)]}, r_cut={ashbaugh.r_cut[(atom1, atom2)]}")
+
 
     # IDP-IDP interactions
     pairwise_interactions(aa_type, aa_type, aa_sigma, aa_sigma, aa_lambda, aa_lambda)
@@ -224,6 +226,7 @@ def cation_pi_lj_potential(cell, aa_type, R_type_list, aa_sigma, rescale=0):
                     cation_pi_lj.params[(atom1, atom2)] = dict(epsilon=0, sigma=0)
                     cation_pi_lj.r_cut[(atom1, atom2)] = 0
                 logging.debug(f"INTERACTIONS: cation-pi {atom1}-{atom2} : {cation_pi_lj.params[(atom1, atom2)]}, r_cut={cation_pi_lj.r_cut[(atom1, atom2)]}")
+
 
     # IDP-IDP interactions
     pairwise_interactions(aa_type, aa_type, aa_sigma, aa_sigma)
@@ -588,7 +591,6 @@ def create_init_configuration(filename, syslist, aa_param_dict, box_length, resc
         fout.close()
 
 
-
 def create_init_configuration_network(filename, network_file, syslist, aa_param_dict, box_length, rescale=0):
     """
     Create an initial configuration for a HOOMD simulation and save it to a GSD file.
@@ -746,10 +748,9 @@ def create_init_configuration_network(filename, network_file, syslist, aa_param_
         raise IndexError("Error: newtork bond names and network bond distances must be of the same length.")
 
 
-
 ### --------------------------------- SIMULATION MODE ------------------------------------------------
 
-def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0, mode='relax', resize=None, network=None):
+def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0, mode='relax', resize=None, displ_active_site=None):
     # UNITS: distance -> nm   (!!!positions and sigma in files are in agstrom!!!)
     #        mass -> amu
     #        energy -> kJ/mol
@@ -868,6 +869,7 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
         harmonic.params['AA_bond'] = dict(k=8033, r0=0.381)
     else:
         harmonic.params['AA_bond'] = dict(k=8360, r0=0.381)
+
     if network is not None:
         foldbond_names = []
         foldbond_distances = []
