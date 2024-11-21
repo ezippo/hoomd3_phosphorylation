@@ -391,6 +391,12 @@ def create_init_configuration(filename, syslist, aa_param_dict, box_length, resc
     s.bonds.typeid = []
     s.bonds.group = []
 
+    if specialLJ:
+        s.pairs.N = 0
+        s.pairs.types = ['TRP334-TRP334']
+        s.pairs.typeid = []
+        s.pairs.group = []
+
     ## create array of c.o.m positions for all the molecules
     positions = hu.generate_positions_cubic_lattice(n_chains, box_length)
     
@@ -407,6 +413,13 @@ def create_init_configuration(filename, syslist, aa_param_dict, box_length, resc
         chain_rel_pos = hu.chain_positions_from_pdb(mol_dict['pdb'], relto='com', chain_mass=chain_mass)   # positions relative to c.o.m. 
         n_mol_chains = int(mol_dict['N'])
             
+        if specialLJ and mol_dict['mol']=='TDP43' and n_mol_chains>1:
+            spLJ_pairs = [[n_prev_res + i_chain*chain_length + 61, n_prev_res + (i_chain+1)*chain_length + 61] for i_chain in range(n_mol_chains-1) ]
+            s.pairs.N += len(spLJ_pairs)
+            s.pairs.typeid += [0]*len(spLJ_pairs)
+            s.pairs.group += spLJ_pairs
+            print(spLJ_pairs)
+
         ## intrinsically disordered case
         if mol_dict['rigid']=='0':
             mol_pos = []
@@ -750,7 +763,7 @@ def create_init_configuration_network(filename, network_file, syslist, aa_param_
 
 ### --------------------------------- SIMULATION MODE ------------------------------------------------
 
-def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0, mode='relax', resize=None, displ_active_site=None):
+def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0, mode='relax', resize=None, network=None, specialLJ=False):
     # UNITS: distance -> nm   (!!!positions and sigma in files are in agstrom!!!)
     #        mass -> amu
     #        energy -> kJ/mol
@@ -890,6 +903,13 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
             harmonic.params[net_name] = dict(k=8033, r0=net_distance)
         for net_name, net_distance in zip(network_names, network_distances):
             harmonic.params[net_name] = dict(k=700, r0=net_distance)
+
+    # special pair LJ
+    if specialLJ:
+        special_pair_lj = hoomd.md.special_pair.LJ()
+        special_pair_lj.params['TRP334-TRP334'] = dict(epsilon=1000, sigma=0.678)
+        special_pair_lj.r_cut['TRP334-TRP334'] = 5
+
         
     # electrostatics forces
     yukawa = yukawa_pair_potential(cell, aa_type, R_type_list, aa_charge, model, production_T, ionic, rescale)
@@ -922,6 +942,8 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
     
     # forces 
     integrator.forces.append(harmonic)
+    if specialLJ:
+        integrator.forces.append(special_pair_lj)
     integrator.forces.append(yukawa)
     # integrator.forces.append(ashbaugh_table)
     integrator.forces.append(ashbaugh)
@@ -950,6 +972,8 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
     therm_quantities = hoomd.md.compute.ThermodynamicQuantities(filter=all_group)
     tq_log = hoomd.logging.Logger()
     tq_log.add(therm_quantities)
+    if specialLJ:
+        tq_log.add(special_pair_lj, quantities=['energies', 'forces'])
     tq_gsd = hoomd.write.GSD(trigger=hoomd.trigger.Periodic(dt_log), 
                              filename=logfile+'_log.gsd', filter=hoomd.filter.Null(),
                              log=tq_log)
