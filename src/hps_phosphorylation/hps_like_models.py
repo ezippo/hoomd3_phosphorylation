@@ -750,7 +750,7 @@ def create_init_configuration_network(filename, network_file, syslist, aa_param_
 
 ### --------------------------------- SIMULATION MODE ------------------------------------------------
 
-def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0, cationpi=False, mode='relax', resize=None, network=None):
+def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0, cationpi=False, mode='relax', resize=None, network=None, logenergy=False):
     # UNITS: distance -> nm   (!!!positions and sigma in files are in agstrom!!!)
     #        mass -> amu
     #        energy -> kJ/mol
@@ -950,6 +950,13 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
     therm_quantities = hoomd.md.compute.ThermodynamicQuantities(filter=all_group)
     tq_log = hoomd.logging.Logger()
     tq_log.add(therm_quantities)
+    if logenergy:
+        tq_log.add(harmonic, quantities=['energies'])
+        tq_log.add(yukawa, quantities=['energies'])
+        tq_log.add(ashbaugh, quantities=['energies'])
+        if cationpi:
+            tq_log.add(cationpi_lj, quantities=['energies'])
+        
     tq_gsd = hoomd.write.GSD(trigger=hoomd.trigger.Periodic(dt_log), 
                              filename=logfile+'_log.gsd', filter=hoomd.filter.Null(),
                              log=tq_log)

@@ -75,6 +75,8 @@ You can specify the input parameters and the type of simulation you want through
   --mode {relax,ness,nophospho}  :  
                         Default 'relax', phosphorylation is active without exchange SER/SEP with the chemical bath. If 'ness' also exchange
                         step is added. If 'nophospho' phosphorylation and exchange are deactivated.
+
+  --logenergy    :   If specified, the log file will store also the potential energy acting on each particle for each pair potential.
                         
 
 **Input file**
