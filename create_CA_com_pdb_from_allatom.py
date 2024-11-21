@@ -13,8 +13,8 @@ if __name__=='__main__':
     group_mode.add_argument('-cm', '--centerofmass', type=str, help='The beads related to residues of the folded domain will be centered in the center-of-mass of the residue instead of the C_alpha. Argument must be formatted as "x1-y1,x2-y2,...,xn-yn" to specify folded domains from residue x1 to y1, from x2 to y2 etc...')
     
     parser.add_argument('-o','--outfile', default='out.pdb', type=str, help='Output file name.')
-    parser.add_argument('-ic','--initialcut', default=0, type=int, help='Remove the first residues up to "initialcut".')
-    parser.add_argument('-fc','--finalcut', default=-1, type=int, help='Remove the last residues starting from "finalcut".')
+    parser.add_argument('-ic','--initialcut', default=0, type=int, help='Remove the first residues up to "initialcut". ')
+    parser.add_argument('-fc','--finalcut', default=-1, type=int, help='Remove the last residues starting from "finalcut". ')
 
     args = parser.parse_args()
 
