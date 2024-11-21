@@ -976,7 +976,7 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
         tq_log.add(harmonic, quantities=['energies'])
         tq_log.add(yukawa, quantities=['energies'])
         tq_log.add(ashbaugh, quantities=['energies'])
-        if cationpi:
+        if model=='HPS_cp':
             tq_log.add(cationpi_lj, quantities=['energies'])
         if specialLJ:
             tq_log.add(special_pair_lj, quantities=['energies', 'forces'])
