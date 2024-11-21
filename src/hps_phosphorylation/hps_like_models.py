@@ -354,7 +354,7 @@ def table_ashbaugh_pair_potential(cell, aa_type, R_type_list, aa_sigma, aa_lambd
 
 ### --------------------------------- CREATE INITIAL CONFIGURATION MODE ------------------------------------------------
 
-def create_init_configuration(filename, syslist, aa_param_dict, box_length, rescale=0):
+def create_init_configuration(filename, syslist, aa_param_dict, box_length, rescale=0, specialLJ=False):
     """
     Create an initial configuration for a HOOMD simulation and save it to a GSD file.
     
