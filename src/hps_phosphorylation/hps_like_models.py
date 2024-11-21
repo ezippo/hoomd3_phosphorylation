@@ -35,7 +35,7 @@ def yukawa_pair_potential(cell, aa_type, R_type_list, aa_charge, model='HPS', te
     """
     yukawa = hoomd.md.pair.Yukawa(nlist=cell)     # Yukawa interaction object using the provided neighbor list (cell)
 
-    if model == "CALVADOS2":
+    if model == "CALVADOS":
         yukawa_eps, yukawa_kappa = hu.compute_yukawa_params(tempK=tempK, ionic=ionic)    # Yukawa potential parameters based on temperature and ionic strength
         r_cutoff = 4.0
     else:
@@ -252,7 +252,7 @@ def cation_pi_lj_potential(cell, aa_type, R_type_list, aa_sigma, rescale=0):
 
 
 # table potential from hoomd3: Van der Waals interactions + cation-pi interaction (with hydrophobicity screening) 
-def table_ashbaugh_pair_potential(cell, aa_type, R_type_list, aa_sigma, aa_lambda, model='HPS', rescale=0):
+def table_ashbaugh_pair_potential(cell, aa_type, R_type_list, aa_sigma, aa_lambda, rescale=0, cationpi=False):
     ashbaugh_table = hoomd.md.pair.Table(nlist=cell)
     cation_type = ["ARG", "LYS"]
     pi_type = ["PHE", "TRP", "TYR"]
@@ -272,7 +272,7 @@ def table_ashbaugh_pair_potential(cell, aa_type, R_type_list, aa_sigma, aa_lambd
             Flist = np.array(hu.Flist_ashbaugh(sigma=[aa_sigma[i], aa_sigma[j]], 
                                     lambda_hps=[aa_lambda[i], aa_lambda[j]],
                                     r_max=2.0, r_min=0.2, n_bins=100000, epsilon=0.8368) )
-            if model=="HPS_cp":
+            if cationpi:
                 # cation-pi interaction
                 if (atom1 in cation_type and atom2 in pi_type) or (atom2 in cation_type and atom1 in pi_type):
                     Ulist += np.array(hu.Ulist_ashbaugh(sigma=[aa_sigma[i], aa_sigma[j]], 
@@ -293,7 +293,7 @@ def table_ashbaugh_pair_potential(cell, aa_type, R_type_list, aa_sigma, aa_lambd
                 Flist = np.array(hu.Flist_ashbaugh(sigma=[aa_sigma[i], aa_sigma[j]], 
                                         lambda_hps=[r_factor*aa_lambda[i], r_factor*aa_lambda[j]],
                                         r_max=2.0, r_min=0.2, n_bins=100000, epsilon=0.8368) )
-                if model=="HPS_cp":
+                if cationpi:
                     # cation-pi interaction
                     if (atom1 in cation_type and atom2 in pi_type) or (atom2 in cation_type and atom1 in pi_type):
                         Ulist += np.array(hu.Ulist_ashbaugh(sigma=[aa_sigma[i], aa_sigma[j]], 
@@ -322,7 +322,7 @@ def table_ashbaugh_pair_potential(cell, aa_type, R_type_list, aa_sigma, aa_lambd
                 Flist = np.array(hu.Flist_ashbaugh(sigma=[aa_sigma[i], aa_sigma[j]], 
                                         lambda_hps=[r_factor*r_factor*aa_lambda[i], r_factor*r_factor*aa_lambda[j]],
                                         r_max=2.0, r_min=0.2, n_bins=100000, epsilon=0.8368) )
-                if model=="HPS_cp":
+                if cationpi:
                     # cation-pi interaction
                     if (atom1 in cation_type and atom2 in pi_type) or (atom2 in cation_type and atom1 in pi_type):
                         Ulist += np.array(hu.Ulist_ashbaugh(sigma=[aa_sigma[i], aa_sigma[j]], 
@@ -750,7 +750,7 @@ def create_init_configuration_network(filename, network_file, syslist, aa_param_
 
 ### --------------------------------- SIMULATION MODE ------------------------------------------------
 
-def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0, mode='relax', resize=None, network=None):
+def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0, cationpi=False, mode='relax', resize=None, network=None):
     # UNITS: distance -> nm   (!!!positions and sigma in files are in agstrom!!!)
     #        mass -> amu
     #        energy -> kJ/mol
@@ -865,7 +865,7 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
     
     # bonds
     harmonic = hoomd.md.bond.Harmonic()
-    if model=="CALVADOS2":
+    if model=="CALVADOS":
         harmonic.params['AA_bond'] = dict(k=8033, r0=0.381)
     else:
         harmonic.params['AA_bond'] = dict(k=8360, r0=0.381)
@@ -895,10 +895,10 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
     yukawa = yukawa_pair_potential(cell, aa_type, R_type_list, aa_charge, model, production_T, ionic, rescale)
     
     # nonbonded: ashbaugh-hatch potential
-    # ashbaugh_table = ashbaugh_hatch_pair_potential(cell, aa_type, R_type_list, aa_sigma, aa_lambda, model, rescale)
+    # ashbaugh_table = ashbaugh_hatch_pair_potential(cell, aa_type, R_type_list, aa_sigma, aa_lambda, model, rescale, cationpi)
     # logging.debug(f"POTENTIALS : yukawa pair potential: {yukawa}")
     ashbaugh = ashbaugh_hatch_pair_potential(cell, aa_type, R_type_list, aa_sigma, aa_lambda, rescale)
-    if model=='HPS_cp':
+    if cationpi:
         cationpi_lj = cation_pi_lj_potential(cell, aa_type, R_type_list, aa_sigma, rescale)
 
     # ## INTEGRATOR
@@ -925,7 +925,7 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
     integrator.forces.append(yukawa)
     # integrator.forces.append(ashbaugh_table)
     integrator.forces.append(ashbaugh)
-    if model=='HPS_cp':
+    if cationpi:
         integrator.forces.append(cationpi_lj)
     integrator.methods.append(langevin)
     
@@ -986,7 +986,7 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
             if len(Dmu_array) != len(active_serials_l):
                 raise ValueError('ERROR: parameter Dmu in input file must match the number of enzymes in the simulation!')
 
-            if model=='HPS_cp':
+            if cationpi:
                 forces_list = [yukawa, ashbaugh, cationpi_lj]
             else:
                 forces_list = [yukawa, ashbaugh]
