@@ -68,6 +68,8 @@ You can specify the input parameters and the type of simulation you want through
                         Default 'relax', phosphorylation is active without exchange SER/SEP with the chemical bath. If 'ness' also exchange
                         step is added. If 'nophospho' phosphorylation and exchange are deactivated.
 
+  --logenergy    :   If specified, the log file will store also the potential energy acting on each particle for each pair potential.
+
 **Input file**
 
 The input file has to be parsed to the script *main.py* through the flag '-i'. It contains the information on topology and parameters necessary to run the simulation.
