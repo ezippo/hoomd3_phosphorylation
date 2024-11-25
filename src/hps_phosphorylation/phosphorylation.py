@@ -88,6 +88,7 @@ class ChangeSerine(hoomd.custom.Action):
         if min_dist<self._contact_dist:
             ser_index = self._ser_serials[np.argmin(distances)]   # get closest serine
 
+            bug_counter = 0
             for idser in range( len(self._id_Ser_types) ):      # id_Ser_types can contain only SER id, or also SER_r in case of rigid bodies  
                 # if closest residue of ser_serials is a Ser, try phosphorylation
                 if snap.particles.typeid[ser_index] == self._id_Ser_types[idser]:
@@ -131,8 +132,10 @@ class ChangeSerine(hoomd.custom.Action):
                         self._glb_contacts += [[timestep, ser_index, 2, min_dist, U_fin-U_in, self._enzyme_ind]]
 
                 else:
-                    raise Exception(f"Residue {ser_index} is not a serine!")
-
+                    bug_counter += 1
+            
+            if bug_counter==len(self._id_Ser_types):
+                raise Exception(f"Residue {ser_index} is not a serine!")
 
 
 class ReservoirExchange(hoomd.custom.Action):
@@ -190,6 +193,7 @@ class ReservoirExchange(hoomd.custom.Action):
         if min_dist>self._bath_dist:
             ser_index = self._ser_serials[np.argmin(distances)]
 
+            bug_counter = 0
             for idser in range( len(self._id_Ser_types) ):      # id_Ser_types can contain only SER id, or also SER_r in case of rigid bodies  
                 # if the farthest particle is Ser, try to switch in pSer with Metropolis
                 if snap.particles.typeid[ser_index] == self._id_Ser_types[idser]:
@@ -222,7 +226,10 @@ class ReservoirExchange(hoomd.custom.Action):
                         logging.debug(f"Rejected reservoir exchange pSer -> Ser: SEP id {ser_index}")
                             
                 else:
-                    raise Exception(f"Residue {ser_index} is not a serine!")
+                    bug_counter += 1
+            
+            if bug_counter==len(self._id_Ser_types):
+                raise Exception(f"Residue {ser_index} is not a serine!")
 
 
 class ContactDetector(hoomd.custom.Action):
