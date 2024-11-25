@@ -123,7 +123,7 @@ class ChangeSerine(hoomd.custom.Action):
                         logging.info(f"Dephosphorylation occured: SER id {ser_index}")
                         self._glb_contacts += [[timestep, ser_index, -1, min_dist, U_fin-U_in, self._enzyme_ind]]
                         if self._glb_changes is not None:
-                        self._glb_changes += [[timestep, ser_index, -1, min_dist, U_fin-U_in, self._enzyme_ind]]
+                            self._glb_changes += [[timestep, ser_index, -1, min_dist, U_fin-U_in, self._enzyme_ind]]
 
                     else:
                         snap.particles.typeid[ser_index] = self._id_pSer_types[idser]
