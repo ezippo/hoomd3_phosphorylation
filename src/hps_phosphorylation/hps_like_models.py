@@ -412,9 +412,7 @@ def create_init_configuration(filename, syslist, aa_param_dict, box_length, resc
             helix_aatypes = [ aa_type[id_aa] for id_aa in chain_id[59:72] ]
             helix_product_aapairs = itertools.product(helix_aatypes,helix_aatypes) 
             helix_product_aapairs = ["".join(pair) for pair in helix_product_aapairs]
-            #splj_types = list( itertools.combinations_with_replacement( set(helix_aatypes),2 ) )
-            helix_product_typeid = [ splj_types.index(pair) for pair in helix_product_aapairs ]
-            
+            #splj_types = list( itertools.combinations_with_replacement( set(helix_aatypes),2 ) )            
             helix_sigma = chain_sigma[59:72]
             splj_sigma_dict = dict()
             for i, helix_aa in enumerate(helix_aatypes):
@@ -422,6 +420,7 @@ def create_init_configuration(filename, syslist, aa_param_dict, box_length, resc
                     splj_sigma_dict["".join((helix_aa,helix_bb))] = (helix_sigma[i] + helix_sigma[j])/2
 
             splj_types = list( splj_sigma_dict.keys() )
+            helix_product_typeid = [ splj_types.index(pair) for pair in helix_product_aapairs ]            
             print(splj_types)
             print(splj_sigma_dict)
             s.pairs.N = 0
