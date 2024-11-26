@@ -848,7 +848,10 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
     logging.debug(f"RIGID : n_rigids_l: {n_rigids_l}")
     
     # phosphosite
-    ser_serials = phospho.phosphosites_from_syslist(syslist, type_id, chain_lengths_l, n_rigids_l)
+    id_Ser_types = list( np.where( np.isin( snap.particles.types, ['SER','SER_r']))[0] )  # id number of the type Ser in free chain and rigid body 
+    id_pSer_types = list( np.where( np.isin( snap.particles.types, ['SEP','SEP_r']))[0] )  # id number of the type pSer in free chain and rigid body 
+    ser_serials = phospho.phosphosites_from_syslist(syslist, type_id, chain_lengths_l, n_rigids_l, id_Ser_types+id_pSer_types)
+    logging.debug(f"PHOSPHOSITES : id_Ser_types+id_pSer_types: {id_Ser_types+id_pSer_types}")
     logging.debug(f"PHOSPHOSITES : ser_serials: {ser_serials}")
 
     # active site
@@ -1010,7 +1013,8 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
 
                 for i,active_serial in enumerate(active_serials_l):
                     bath_actions_l += [ phospho.ReservoirExchange(active_serials=active_serial, ser_serials=ser_serials, forces=forces_list, 
-                                            glb_changes=changes, temp=temp, Dmu=float(Dmu_array[i]), box_size=box_size, bath_dist=bath_dist) ]
+                                            glb_changes=changes, temp=temp, Dmu=float(Dmu_array[i]), box_size=box_size, bath_dist=bath_dist,
+                                            id_Ser_types=id_Ser_types, id_pSer_types=id_pSer_types) ]
                     bath_updaters_l += [ hoomd.update.CustomUpdater(action=bath_actions_l[-1], trigger=hoomd.trigger.Periodic(dt_bath, phase=i)) ]
 
                 # backup action
@@ -1022,7 +1026,7 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
             for i,active_serial in enumerate(active_serials_l):
                 changeser_actions_l += [ phospho.ChangeSerine(active_serials=active_serial, ser_serials=ser_serials, forces=forces_list, 
                                             glb_contacts=contacts, temp=temp, Dmu=float(Dmu_array[i]), box_size=box_size, contact_dist=contact_dist, enzyme_ind=i, 
-                                            glb_changes=changes) ]
+                                            glb_changes=changes, id_Ser_types=id_Ser_types, id_pSer_types=id_pSer_types) ]
                 changeser_updaters_l += [ hoomd.update.CustomUpdater(action=changeser_actions_l[-1], trigger=hoomd.trigger.Periodic(dt_try_change, phase=i)) ]
 
         # backup action    

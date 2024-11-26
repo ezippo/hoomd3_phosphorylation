@@ -46,10 +46,11 @@ class ChangeSerine(hoomd.custom.Action):
         contact_dist (float): Distance threshold for a contact between the enzyme active site residues and a serine.
         enzyme_ind (int): Index of the enzyme for tracking in case of multiple enzymes.
         glb_changes (list, optional): Global list to record type change events (Ser to pSer or opposite), necessary only in simulation mode 'ness'. Default None.
-        displ_as_pos (ndarray, optional): Array with list of displacement vectors for each active site residue. Default None, no displacement.
-        reference_vector (ndarray, optional): Array with reference vector to compute the rotation of the rigid body with the active site. Needed in case of displacement (displ_as_pos not None). Default None.
+        id_Ser_types (list, optional): List of IDs number associated with Ser in free chain and rigid body. Default [15] (no rigid body).
+        id_pSer_types (list, optional): List of IDs number associated with pSer in free chain and rigid body. Default [20] (no rigid body).
+
     """
-    def __init__(self, active_serials, ser_serials, forces, glb_contacts, temp, Dmu, box_size, contact_dist, enzyme_ind, glb_changes=None):
+    def __init__(self, active_serials, ser_serials, forces, glb_contacts, temp, Dmu, box_size, contact_dist, enzyme_ind, glb_changes=None, id_Ser_types=[15], id_pSer_types=[20]):
         # Initialize all instance variables
         self._active_serials = active_serials
         self._ser_serials = ser_serials
@@ -61,6 +62,8 @@ class ChangeSerine(hoomd.custom.Action):
         self._contact_dist = contact_dist
         self._enzyme_ind = enzyme_ind
         self._glb_changes = glb_changes
+        self._id_Ser_types = id_Ser_types
+        self._id_pSer_types = id_pSer_types
 
     def act(self, timestep):
         """
@@ -85,50 +88,54 @@ class ChangeSerine(hoomd.custom.Action):
         if min_dist<self._contact_dist:
             ser_index = self._ser_serials[np.argmin(distances)]   # get closest serine
 
-            # if closest residue of ser_serials is a Ser, try phosphorylation
-            if snap.particles.typeid[ser_index]==15:
-                U_in = self._forces[0].energy + self._forces[1].energy
-                snap.particles.typeid[ser_index] = 20
-                self._state.set_snapshot(snap)
-                U_fin = self._forces[0].energy + self._forces[1].energy
-                logging.debug(f"U_fin = {U_fin}, U_in = {U_in}")
+            bug_counter = 0
+            for idser in range( len(self._id_Ser_types) ):      # id_Ser_types can contain only SER id, or also SER_r in case of rigid bodies  
+                # if closest residue of ser_serials is a Ser, try phosphorylation
+                if snap.particles.typeid[ser_index] == self._id_Ser_types[idser]:
+                    U_in = self._forces[0].energy + self._forces[1].energy
+                    snap.particles.typeid[ser_index] = self._id_pSer_types[idser]
+                    self._state.set_snapshot(snap)
+                    U_fin = self._forces[0].energy + self._forces[1].energy
+                    logging.debug(f"U_fin = {U_fin}, U_in = {U_in}")
 
-                # Apply the Metropolis criterion for phosphorylation
-                if metropolis_boltzmann(U_fin-U_in, self._Dmu, self._temp):
-                    logging.info(f"Phosphorylation occured: SER id {ser_index}")
-                    self._glb_contacts += [[timestep, ser_index, 1, min_dist, U_fin-U_in, self._enzyme_ind]]
-                    if self._glb_changes is not None:
-                        self._glb_changes += [[timestep, ser_index, 1, min_dist, U_fin-U_in, self._enzyme_ind]]
+                    # Apply the Metropolis criterion for phosphorylation
+                    if metropolis_boltzmann(U_fin-U_in, self._Dmu, self._temp):
+                        logging.info(f"Phosphorylation occured: SER id {ser_index}")
+                        self._glb_contacts += [[timestep, ser_index, 1, min_dist, U_fin-U_in, self._enzyme_ind]]
+                        if self._glb_changes is not None:
+                            self._glb_changes += [[timestep, ser_index, 1, min_dist, U_fin-U_in, self._enzyme_ind]]
+
+                    else:
+                        # Revert if the Metropolis test fails
+                        snap.particles.typeid[ser_index] = self._id_Ser_types[idser]
+                        self._state.set_snapshot(snap)
+                        logging.info(f'Phosphorylation SER id {ser_index} not accepted')
+                        self._glb_contacts += [[timestep, ser_index, 0, min_dist, U_fin-U_in, self._enzyme_ind]]
+                        
+                # if closest residue of ser_serials is a pSer, try de-phosphorylation
+                elif snap.particles.typeid[ser_index]==self._id_pSer_types[idser]:
+                    U_in = self._forces[0].energy + self._forces[1].energy
+                    snap.particles.typeid[ser_index] = self._id_Ser_types[idser]
+                    self._state.set_snapshot(snap)
+                    U_fin = self._forces[0].energy + self._forces[1].energy
+                    logging.debug(f"U_fin = {U_fin}, U_in = {U_in}")
+                    if metropolis_boltzmann(U_fin-U_in, -self._Dmu, self._temp):
+                        logging.info(f"Dephosphorylation occured: SER id {ser_index}")
+                        self._glb_contacts += [[timestep, ser_index, -1, min_dist, U_fin-U_in, self._enzyme_ind]]
+                        if self._glb_changes is not None:
+                            self._glb_changes += [[timestep, ser_index, -1, min_dist, U_fin-U_in, self._enzyme_ind]]
+
+                    else:
+                        snap.particles.typeid[ser_index] = self._id_pSer_types[idser]
+                        self._state.set_snapshot(snap)
+                        logging.info(f'Dephosphorylation SER id {ser_index} not accepted')
+                        self._glb_contacts += [[timestep, ser_index, 2, min_dist, U_fin-U_in, self._enzyme_ind]]
 
                 else:
-                    # Revert if the Metropolis test fails
-                    snap.particles.typeid[ser_index] = 15
-                    self._state.set_snapshot(snap)
-                    logging.info(f'Phosphorylation SER id {ser_index} not accepted')
-                    self._glb_contacts += [[timestep, ser_index, 0, min_dist, U_fin-U_in, self._enzyme_ind]]
-                    
-            # if closest residue of ser_serials is a pSer, try de-phosphorylation
-            elif snap.particles.typeid[ser_index]==20:
-                U_in = self._forces[0].energy + self._forces[1].energy
-                snap.particles.typeid[ser_index] = 15
-                self._state.set_snapshot(snap)
-                U_fin = self._forces[0].energy + self._forces[1].energy
-                logging.debug(f"U_fin = {U_fin}, U_in = {U_in}")
-                if metropolis_boltzmann(U_fin-U_in, -self._Dmu, self._temp):
-                    logging.info(f"Dephosphorylation occured: SER id {ser_index}")
-                    self._glb_contacts += [[timestep, ser_index, -1, min_dist, U_fin-U_in, self._enzyme_ind]]
-                    if self._glb_changes is not None:
-                       self._glb_changes += [[timestep, ser_index, -1, min_dist, U_fin-U_in, self._enzyme_ind]]
-
-                else:
-                    snap.particles.typeid[ser_index] = 20
-                    self._state.set_snapshot(snap)
-                    logging.info(f'Dephosphorylation SER id {ser_index} not accepted')
-                    self._glb_contacts += [[timestep, ser_index, 2, min_dist, U_fin-U_in, self._enzyme_ind]]
-
-            else:
+                    bug_counter += 1
+            
+            if bug_counter==len(self._id_Ser_types):
                 raise Exception(f"Residue {ser_index} is not a serine!")
-
 
 
 class ReservoirExchange(hoomd.custom.Action):
@@ -148,8 +155,11 @@ class ReservoirExchange(hoomd.custom.Action):
         Dmu (float): Chemical potential difference for phosphorylation/dephosphorylation Metropolis step.
         box_size (tuple): Size of the simulation box (x, y, z dimensions).
         bath_dist (float): Minimum distance threshold for reservoir exchange.
+        id_Ser_types (list, optional): List of IDs number associated with Ser in free chain and rigid body. Default [15] (no rigid body).
+        id_pSer_types (list, optional): List of IDs number associated with pSer in free chain and rigid body. Default [20] (no rigid body).
+
     """
-    def __init__(self, active_serials, ser_serials, forces, glb_changes, temp, Dmu, box_size, bath_dist):
+    def __init__(self, active_serials, ser_serials, forces, glb_changes, temp, Dmu, box_size, bath_dist, id_Ser_types=[15], id_pSer_types=[20]):
         self._active_serials = active_serials
         self._ser_serials = ser_serials
         self._forces = forces
@@ -158,6 +168,8 @@ class ReservoirExchange(hoomd.custom.Action):
         self._glb_changes = glb_changes
         self._box_size = box_size
         self._bath_dist = bath_dist
+        self._id_Ser_types = id_Ser_types
+        self._id_pSer_types = id_pSer_types
         
     def act(self, timestep):
         """
@@ -181,33 +193,42 @@ class ReservoirExchange(hoomd.custom.Action):
         if min_dist>self._bath_dist:
             ser_index = self._ser_serials[np.argmin(distances)]
 
-            # if the farthest particle is Ser, try to switch in pSer with Metropolis
-            if snap.particles.typeid[ser_index]==15:
-                U_in = self._forces[0].energy + self._forces[1].energy
-                snap.particles.typeid[ser_index] = 20
-                self._state.set_snapshot(snap)
-                U_fin = self._forces[0].energy + self._forces[1].energy
-                logging.debug(f"U_fin = {U_fin}, U_in = {U_in}")
-                if metropolis_boltzmann(U_fin-U_in, 0, self._temp):
-                    self._glb_changes += [[timestep, ser_index, 10, min_dist, U_fin-U_in, -1]]
-                else:
-                    snap.particles.typeid[ser_index] = 15
+            bug_counter = 0
+            for idser in range( len(self._id_Ser_types) ):      # id_Ser_types can contain only SER id, or also SER_r in case of rigid bodies  
+                # if the farthest particle is Ser, try to switch in pSer with Metropolis
+                if snap.particles.typeid[ser_index] == self._id_Ser_types[idser]:
+                    U_in = self._forces[0].energy + self._forces[1].energy
+                    snap.particles.typeid[ser_index] = self._id_pSer_types[idser]
                     self._state.set_snapshot(snap)
-                        
-            # if the farthest particle is pSer, try to switch in Ser with Metropolis
-            elif snap.particles.typeid[ser_index]==20:
-                U_in = self._forces[0].energy + self._forces[1].energy
-                snap.particles.typeid[ser_index] = 15
-                self._state.set_snapshot(snap)
-                U_fin = self._forces[0].energy + self._forces[1].energy
-                logging.debug(f"U_fin = {U_fin}, U_in = {U_in}")
-                if metropolis_boltzmann(U_fin-U_in, 0, self._temp):
-                    self._glb_changes += [[timestep, ser_index, -10, min_dist, U_fin-U_in, -1]]
-                else:
-                    snap.particles.typeid[ser_index] = 20
+                    U_fin = self._forces[0].energy + self._forces[1].energy
+                    logging.debug(f"U_fin = {U_fin}, U_in = {U_in}")
+                    if metropolis_boltzmann(U_fin-U_in, 0, self._temp):
+                        self._glb_changes += [[timestep, ser_index, 10, min_dist, U_fin-U_in, -1]]
+                        logging.debug(f"Reservoir exchange Ser -> pSer: SER id {ser_index}")
+                    else:
+                        snap.particles.typeid[ser_index] = self._id_Ser_types[idser]
+                        self._state.set_snapshot(snap)
+                        logging.debug(f"Rejected reservoir exchange Ser -> pSer: SER id {ser_index}")
+                            
+                # if the farthest particle is pSer, try to switch in Ser with Metropolis
+                elif snap.particles.typeid[ser_index] == self._id_pSer_types[idser]:
+                    U_in = self._forces[0].energy + self._forces[1].energy
+                    snap.particles.typeid[ser_index] = self._id_Ser_types[idser]
                     self._state.set_snapshot(snap)
-                        
-            else:
+                    U_fin = self._forces[0].energy + self._forces[1].energy
+                    logging.debug(f"U_fin = {U_fin}, U_in = {U_in}")
+                    if metropolis_boltzmann(U_fin-U_in, 0, self._temp):
+                        self._glb_changes += [[timestep, ser_index, -10, min_dist, U_fin-U_in, -1]]
+                        logging.debug(f"Reservoir exchange pSer -> Ser: SEP id {ser_index}")
+                    else:
+                        snap.particles.typeid[ser_index] = self._id_pSer_types[idser]
+                        self._state.set_snapshot(snap)
+                        logging.debug(f"Rejected reservoir exchange pSer -> Ser: SEP id {ser_index}")
+                            
+                else:
+                    bug_counter += 1
+            
+            if bug_counter==len(self._id_Ser_types):
                 raise Exception(f"Residue {ser_index} is not a serine!")
 
 
@@ -296,7 +317,7 @@ class ChangesBackUp(hoomd.custom.Action):
         np.savetxt(self._logfile+"_changesBCKP.txt", self._glb_changes, fmt='%f')
 
 
-def phosphosites_from_syslist(syslist, type_id, chain_lengths_l, n_rigids_l):
+def phosphosites_from_syslist(syslist, type_id, chain_lengths_l, n_rigids_l, id_ser_types=[15,20]):
     """
     Extracts phosphosite serials from a system list.
 
@@ -308,6 +329,7 @@ def phosphosites_from_syslist(syslist, type_id, chain_lengths_l, n_rigids_l):
         type_id (list of int): List of type IDs for particles.
         chain_lengths_l (list of int): List of chain lengths for each molecule.
         n_rigids_l (list of int): List of rigid body indices for each molecule.
+        id_ser_types (list of int): List of IDs number associated with Ser and pSer in free chain and rigid body. Default [15,20] (no rigid body).
 
     Returns:
         list of int: List of reordered indices corresponding to phosphosites.
@@ -333,7 +355,7 @@ def phosphosites_from_syslist(syslist, type_id, chain_lengths_l, n_rigids_l):
         elif phospho_sites.startswith('SER'):
             ser_specific = phospho_sites.rsplit(":")
             # mask for Ser/pSer residues in type_id of molecules mol_dict['mol']
-            tmp_mask = np.isin([type_id[i] for i in reordered_list[prev_res:prev_res + end_index]], [15, 20])  
+            tmp_mask = np.isin([type_id[i] for i in reordered_list[prev_res:prev_res + end_index]], id_ser_types)  
 
             if len(ser_specific) == 2:
                 # extract Ser/pSer only in a specific range ('SER:start-end')
