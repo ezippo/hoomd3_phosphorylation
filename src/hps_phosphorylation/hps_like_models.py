@@ -621,10 +621,10 @@ def create_init_configuration(filename, syslist, aa_param_dict, box_length, resc
 
     # ADD SPECIAL PAIR LJ
     if 'splj_types' in locals():
-        s1.pairs.N += len(splj_pairs)
-        s1.pairs.typeid += splj_id
-        s1.pairs.group += splj_pairs
-        print(spLJ_pairs)
+        s1.pairs.N = len(splj_pairs)
+        s1.pairs.typeid = splj_id
+        s1.pairs.group = splj_pairs
+        print(splj_pairs)
         with open(specialLJ, "w") as file:  
             for name in splj_types:
                 file.write(f"{name}  {splj_sigma_dict[name]}\n")
