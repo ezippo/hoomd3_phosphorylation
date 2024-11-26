@@ -4,6 +4,7 @@
 import os
 import time
 import logging
+import itertools 
 
 import numpy as np
 import hoomd
@@ -354,7 +355,7 @@ def table_ashbaugh_pair_potential(cell, aa_type, R_type_list, aa_sigma, aa_lambd
 
 ### --------------------------------- CREATE INITIAL CONFIGURATION MODE ------------------------------------------------
 
-def create_init_configuration(filename, syslist, aa_param_dict, box_length, rescale=0, specialLJ=False):
+def create_init_configuration(filename, syslist, aa_param_dict, box_length, rescale=0, specialLJ=None):
     """
     Create an initial configuration for a HOOMD simulation and save it to a GSD file.
     
@@ -391,12 +392,6 @@ def create_init_configuration(filename, syslist, aa_param_dict, box_length, resc
     s.bonds.typeid = []
     s.bonds.group = []
 
-    if specialLJ:
-        s.pairs.N = 0
-        s.pairs.types = ['TRP334-TRP334']
-        s.pairs.typeid = []
-        s.pairs.group = []
-
     ## create array of c.o.m positions for all the molecules
     positions = hu.generate_positions_cubic_lattice(n_chains, box_length)
     
@@ -407,18 +402,32 @@ def create_init_configuration(filename, syslist, aa_param_dict, box_length, resc
     chain_lengths_list = []
     for mol in range(n_mols):
         mol_dict = syslist[mol]
-        chain_id, chain_mass, chain_charge, _, _ = hu.aa_stats_sequence(mol_dict['pdb'], aa_param_dict)
+        chain_id, chain_mass, chain_charge, chain_sigma, _ = hu.aa_stats_sequence(mol_dict['pdb'], aa_param_dict)
         chain_length = len(chain_id)
         chain_lengths_list += [chain_length]
         chain_rel_pos = hu.chain_positions_from_pdb(mol_dict['pdb'], relto='com', chain_mass=chain_mass)   # positions relative to c.o.m. 
         n_mol_chains = int(mol_dict['N'])
             
-        if specialLJ and mol_dict['mol']=='TDP43' and n_mol_chains>1:
-            spLJ_pairs = [[n_prev_res + i_chain*chain_length + 61, n_prev_res + (i_chain+1)*chain_length + 61] for i_chain in range(n_mol_chains-1) ]
-            s.pairs.N += len(spLJ_pairs)
-            s.pairs.typeid += [0]*len(spLJ_pairs)
-            s.pairs.group += spLJ_pairs
-            print(spLJ_pairs)
+        if specialLJ!=None and mol_dict['mol']=='TDP43' and n_mol_chains>1:
+            helix_aatypes = [ aa_type[id_aa] for id_aa in chain_id[59:72] ]
+            helix_product_aapairs = itertools.product(helix_aatypes,helix_aatypes) 
+            helix_product_aapairs = ["".join(pair) for pair in helix_product_aapairs]
+            #splj_types = list( itertools.combinations_with_replacement( set(helix_aatypes),2 ) )
+            helix_product_typeid = [ splj_types.index(pair) for pair in helix_product_aapairs ]
+            
+            helix_sigma = chain_sigma[59:72]
+            splj_sigma_dict = dict()
+            for i, helix_aa in enumerate(helix_aatypes):
+                for j, helix_bb in enumerate(helix_aatypes):
+                    splj_sigma_dict["".join((helix_aa,helix_bb))] = (helix_sigma[i] + helix_sigma[j])/2
+
+            splj_types = list( splj_sigma_dict.keys() )
+            print(splj_types)
+            print(splj_sigma_dict)
+            s.pairs.N = 0
+            s.pairs.types = splj_types
+            s.pairs.typeid = []
+            s.pairs.group = []
 
         ## intrinsically disordered case
         if mol_dict['rigid']=='0':
@@ -575,13 +584,24 @@ def create_init_configuration(filename, syslist, aa_param_dict, box_length, resc
 
     ## bonds free rigid
     bonds_free_rigid = []
+    splj_pairs = []
+    splj_id =[]
     n_prev_res = 0
     for mol in range(n_mols):
         mol_dict = syslist[mol]
+        
         if mol_dict['rigid']!='0':
             rigid_ind_l = hu.read_rigid_indexes(mol_dict['rigid'])
             n_rigids = len(rigid_ind_l)
+
             for ch in range(int(mol_dict['N'])):
+                if specialLJ!=None and mol_dict['mol']=='TDP43' and n_mol_chains>1:
+                    splj_list1 = [ reordered_ind[n_prev_res+n_rigids+ ihelix] for ihelix in range(59,72)]
+                    for ch2 in range(ch+1, int(mol_dict['N'])):
+                        splj_list2 =  [ reordered_ind[n_prev_res+ (chain_lengths_list[mol]+n_rigids)*(ch2-ch) +n_rigids+ihelix] for ihelix in range(59,72)]
+                        splj_pairs += list( itertools.product(splj_list1, splj_list2) )
+                        splj_id += helix_product_typeid
+            
                 for nr in range(n_rigids):
                     start_rig = n_prev_res + rigid_ind_l[nr][0]
                     if start_rig > n_prev_res:
@@ -599,6 +619,17 @@ def create_init_configuration(filename, syslist, aa_param_dict, box_length, resc
     s1.bonds.typeid = [0]*len(bond_pairs_tot)
     s1.bonds.group = bond_pairs_tot
     print(s1.particles.N)
+
+    # ADD SPECIAL PAIR LJ
+    if 'splj_types' in locals():
+        s1.pairs.N += len(splj_pairs)
+        s1.pairs.typeid += splj_id
+        s1.pairs.group += splj_pairs
+        print(spLJ_pairs)
+        with open(specialLJ, "w") as file:  
+            for name in splj_types:
+                file.write(f"{name}  {splj_sigma_dict[name]}\n")
+
     with gsd.hoomd.open(name=filename, mode='wb') as fout:
         fout.append(s1)
         fout.close()
@@ -763,7 +794,7 @@ def create_init_configuration_network(filename, network_file, syslist, aa_param_
 
 ### --------------------------------- SIMULATION MODE ------------------------------------------------
 
-def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0, mode='relax', resize=None, network=None, specialLJ=False, logenergy=False):
+def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0, mode='relax', resize=None, network=None, specialLJ=None, logenergy=False):
     # UNITS: distance -> nm   (!!!positions and sigma in files are in agstrom!!!)
     #        mass -> amu
     #        energy -> kJ/mol
@@ -908,11 +939,13 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
             harmonic.params[net_name] = dict(k=700, r0=net_distance)
 
     # special pair LJ
-    if specialLJ:
+    if specialLJ!=None:
         special_pair_lj = hoomd.md.special_pair.LJ()
-        special_pair_lj.params['TRP334-TRP334'] = dict(epsilon=1000, sigma=0.678)
-        special_pair_lj.r_cut['TRP334-TRP334'] = 5
-
+        with open(specialLJ, "r") as file:
+            for line in file:
+                splj_name, splj_sigma = line.split()
+                special_pair_lj.params[splj_name] = dict(epsilon=1000, sigma=splj_sigma)
+                special_pair_lj.r_cut[splj_name] = 5
         
     # electrostatics forces
     yukawa = yukawa_pair_potential(cell, aa_type, R_type_list, aa_charge, model, production_T, ionic, rescale)
@@ -945,7 +978,7 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
     
     # forces 
     integrator.forces.append(harmonic)
-    if specialLJ:
+    if specialLJ!=None:
         integrator.forces.append(special_pair_lj)
     integrator.forces.append(yukawa)
     # integrator.forces.append(ashbaugh_table)
@@ -981,7 +1014,7 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
         tq_log.add(ashbaugh, quantities=['energies'])
         if model=='HPS_cp':
             tq_log.add(cationpi_lj, quantities=['energies'])
-        if specialLJ:
+        if specialLJ!=None:
             tq_log.add(special_pair_lj, quantities=['energies', 'forces'])
     tq_gsd = hoomd.write.GSD(trigger=hoomd.trigger.Periodic(dt_log), 
                              filename=logfile+'_log.gsd', filter=hoomd.filter.Null(),
