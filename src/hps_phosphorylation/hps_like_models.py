@@ -410,14 +410,16 @@ def create_init_configuration(filename, syslist, aa_param_dict, box_length, resc
             
         if specialLJ!=None and mol_dict['mol']=='TDP43' and n_mol_chains>1:
             helix_aatypes = [ aa_type[id_aa] for id_aa in chain_id[59:72] ]
-            helix_product_aapairs = itertools.product(helix_aatypes,helix_aatypes) 
-            helix_product_aapairs = ["".join(pair) for pair in helix_product_aapairs]
-            #splj_types = list( itertools.combinations_with_replacement( set(helix_aatypes),2 ) )            
             helix_sigma = chain_sigma[59:72]
+
+            helix_product_aapairs = [ sorted(pair) for pair in itertools.product(helix_aatypes,helix_aatypes) ]
+            helix_product_aapairs = ["".join(pair) for pair in helix_product_aapairs]
+            #splj_types = list( set(helix_product_aapairs) )            
+            
+            helix_product_sigma = [ sum(pair)/2 for pair in itertools.product(helix_sigma,helix_sigma) ]
             splj_sigma_dict = dict()
-            for i, helix_aa in enumerate(helix_aatypes):
-                for j, helix_bb in enumerate(helix_aatypes):
-                    splj_sigma_dict["".join((helix_aa,helix_bb))] = (helix_sigma[i] + helix_sigma[j])/2
+            for i in range(len(helix_product_aapairs)):
+                splj_sigma_dict[helix_product_aapairs[i]] = helix_product_sigma[i]
 
             splj_types = list( splj_sigma_dict.keys() )
             helix_product_typeid = [ splj_types.index(pair) for pair in helix_product_aapairs ]            
@@ -626,6 +628,7 @@ def create_init_configuration(filename, syslist, aa_param_dict, box_length, resc
         s1.pairs.typeid = splj_id
         s1.pairs.group = splj_pairs
         print(splj_pairs)
+        print(len(splj_pairs))
         with open(specialLJ, "w") as file:  
             for name in splj_types:
                 file.write(f"{name}  {splj_sigma_dict[name]}\n")
