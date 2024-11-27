@@ -423,6 +423,7 @@ def create_init_configuration(filename, syslist, aa_param_dict, box_length, resc
             helix_product_typeid = [ splj_types.index(pair) for pair in helix_product_aapairs ]            
             print(splj_types)
             print(splj_sigma_dict)
+            print(helix_product_typeid)
             s.pairs.N = 0
             s.pairs.types = splj_types
             s.pairs.typeid = []
