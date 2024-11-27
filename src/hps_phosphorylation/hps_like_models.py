@@ -410,13 +410,13 @@ def create_init_configuration(filename, syslist, aa_param_dict, box_length, resc
             
         if specialLJ!=None and mol_dict['mol']=='TDP43' and n_mol_chains>1:
             helix_aatypes = [ aa_type[id_aa] for id_aa in chain_id[59:72] ]
-            helix_sigma = chain_sigma[59:72]/10
+            helix_sigma = chain_sigma[59:72]
 
             helix_product_aapairs = [ sorted(pair) for pair in itertools.product(helix_aatypes,helix_aatypes) ]
             helix_product_aapairs = ["".join(pair) for pair in helix_product_aapairs]
             #splj_types = list( set(helix_product_aapairs) )            
             
-            helix_product_sigma = [ sum(pair)/2 for pair in itertools.product(helix_sigma,helix_sigma) ]
+            helix_product_sigma = [ sum(pair)/2/10 for pair in itertools.product(helix_sigma,helix_sigma) ]
             splj_sigma_dict = dict()
             for i in range(len(helix_product_aapairs)):
                 splj_sigma_dict[helix_product_aapairs[i]] = helix_product_sigma[i]
