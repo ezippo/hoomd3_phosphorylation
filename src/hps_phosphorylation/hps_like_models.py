@@ -410,7 +410,7 @@ def create_init_configuration(filename, syslist, aa_param_dict, box_length, resc
             
         if specialLJ!=None and mol_dict['mol']=='TDP43' and n_mol_chains>1:
             helix_aatypes = [ aa_type[id_aa] for id_aa in chain_id[59:72] ]
-            helix_sigma = chain_sigma[59:72]
+            helix_sigma = chain_sigma[59:72]/10
 
             helix_product_aapairs = [ sorted(pair) for pair in itertools.product(helix_aatypes,helix_aatypes) ]
             helix_product_aapairs = ["".join(pair) for pair in helix_product_aapairs]
