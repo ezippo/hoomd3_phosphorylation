@@ -423,13 +423,6 @@ def create_init_configuration(filename, syslist, aa_param_dict, box_length, resc
 
             splj_types = list( splj_sigma_dict.keys() )
             helix_product_typeid = [ splj_types.index(pair) for pair in helix_product_aapairs ]            
-            print(splj_types)
-            print(splj_sigma_dict)
-            print(helix_product_typeid)
-            s.pairs.N = 0
-            s.pairs.types = splj_types
-            s.pairs.typeid = []
-            s.pairs.group = []
 
         ## intrinsically disordered case
         if mol_dict['rigid']=='0':
@@ -625,10 +618,14 @@ def create_init_configuration(filename, syslist, aa_param_dict, box_length, resc
     # ADD SPECIAL PAIR LJ
     if 'splj_types' in locals():
         s1.pairs.N = len(splj_pairs)
+        s1.pairs.types = splj_types
         s1.pairs.typeid = splj_id
         s1.pairs.group = splj_pairs
-        print(splj_pairs)
-        print(len(splj_pairs))
+        print(s1.pairs.N)
+        print(s1.pairs.types)
+        print(s1.pairs.typeid)
+        print(s1.pairs.group)
+        
         with open(specialLJ, "w") as file:  
             for name in splj_types:
                 file.write(f"{name}  {splj_sigma_dict[name]}\n")
