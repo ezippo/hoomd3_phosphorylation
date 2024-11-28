@@ -944,7 +944,7 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
         with open(specialLJ, "r") as file:
             for line in file:
                 splj_name, splj_sigma = line.split()
-                special_pair_lj.params[splj_name] = dict(epsilon=temp, sigma=splj_sigma)
+                special_pair_lj.params[splj_name] = dict(epsilon=temp/10, sigma=splj_sigma)
                 special_pair_lj.r_cut[splj_name] = 2.0
         
     # electrostatics forces
