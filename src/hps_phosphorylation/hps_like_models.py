@@ -913,8 +913,11 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
         cationpi_lj = cation_pi_lj_potential(cell, aa_type, R_type_list, aa_sigma, rescale)
 
     # ## INTEGRATOR
-    integrator = hoomd.md.Integrator(production_dt, integrate_rotational_dof=True)        
-    
+    if network==None:
+        integrator = hoomd.md.Integrator(production_dt, integrate_rotational_dof=True)        
+    else:
+        integrator = hoomd.md.Integrator(production_dt, integrate_rotational_dof=False)        
+
     # method : Langevin thermostat
     langevin = hoomd.md.methods.Langevin(filter=moving_group, kT=temp)
     for i,name in enumerate(aa_type):
