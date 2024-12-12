@@ -423,7 +423,35 @@ def activesites_from_syslist(syslist, chain_lengths_l, n_rigids_l):
         prev_res +=n_mol_chains*n_mol_residues
         
     return activesites
-        
+
+
+def activesites_from_syslist_network(syslist, chain_lengths_l):
+
+    n_mols = len(syslist)
+    activesites = []
+    prev_res = 0 
+
+    for mol in range(n_mols):
+        mol_dict = syslist[mol]
+        n_mol_chains = int(mol_dict['N'])
+        n_mol_residues = chain_lengths_l[mol]   
+        active_sites = mol_dict['active_sites']
+
+        if active_sites != '0':
+            active_sites_list = list(map(int, active_sites.split(',')))
+
+            active_serials_per_chain = [
+                [ i for i in list(np.array(active_sites_list)-1 + prev_res + nc * n_mol_residues)]
+               for nc in range(n_mol_chains)
+            ]
+            activesites.extend(active_serials_per_chain)
+
+        prev_res +=n_mol_chains*n_mol_residues
+
+    return activesites
+
+
+
         
 if __name__=='__main__':
     import gsd
