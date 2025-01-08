@@ -355,7 +355,7 @@ def table_ashbaugh_pair_potential(cell, aa_type, R_type_list, aa_sigma, aa_lambd
 
 ### --------------------------------- CREATE INITIAL CONFIGURATION MODE ------------------------------------------------
 
-def create_init_configuration(filename, syslist, aa_param_dict, box_length, rescale=0, specialLJ=None):
+def create_init_configuration(filename, syslist, aa_param_dict, box_length, rescale=0, specialLJ=False):
     """
     Create an initial configuration for a HOOMD simulation and save it to a GSD file.
     
@@ -407,22 +407,6 @@ def create_init_configuration(filename, syslist, aa_param_dict, box_length, resc
         chain_lengths_list += [chain_length]
         chain_rel_pos = hu.chain_positions_from_pdb(mol_dict['pdb'], relto='com', chain_mass=chain_mass)   # positions relative to c.o.m. 
         n_mol_chains = int(mol_dict['N'])
-            
-        if specialLJ!=None and mol_dict['mol']=='TDP43' and n_mol_chains>1:
-            helix_aatypes = [ aa_type[id_aa] for id_aa in chain_id[59:72] ]
-            helix_sigma = chain_sigma[59:72]
-
-            helix_product_aapairs = [ sorted(pair) for pair in itertools.product(helix_aatypes,helix_aatypes) ]
-            helix_product_aapairs = ["".join(pair) for pair in helix_product_aapairs]
-            #splj_types = list( set(helix_product_aapairs) )            
-            
-            helix_product_sigma = [ sum(pair)/2/10 for pair in itertools.product(helix_sigma,helix_sigma) ]
-            splj_sigma_dict = dict()
-            for i in range(len(helix_product_aapairs)):
-                splj_sigma_dict[helix_product_aapairs[i]] = helix_product_sigma[i]
-
-            splj_types = list( splj_sigma_dict.keys() )
-            helix_product_typeid = [ splj_types.index(pair) for pair in helix_product_aapairs ]            
 
         ## intrinsically disordered case
         if mol_dict['rigid']=='0':
@@ -560,6 +544,10 @@ def create_init_configuration(filename, syslist, aa_param_dict, box_length, resc
     ### BUILD RIGID BODIES
     if rescale:
         s.particles.types += aa_type_r
+
+    if specialLJ!=None:
+        rigid.body['R1']["constituent_types"] = [ rigid.body['R1']["constituent_types"][i]+'_h' for i in range(len(rigid.body['R1']["constituent_types"])) ]
+        s.particles.types += list(set(rigid.body['R1']["constituent_types"]))
     
     sim = hoomd.Simulation(device=hoomd.device.CPU())
     sim.create_state_from_snapshot(s)
@@ -579,8 +567,6 @@ def create_init_configuration(filename, syslist, aa_param_dict, box_length, resc
 
     ## bonds free rigid
     bonds_free_rigid = []
-    splj_pairs = []
-    splj_id =[]
     n_prev_res = 0
     for mol in range(n_mols):
         mol_dict = syslist[mol]
@@ -589,14 +575,7 @@ def create_init_configuration(filename, syslist, aa_param_dict, box_length, resc
             rigid_ind_l = hu.read_rigid_indexes(mol_dict['rigid'])
             n_rigids = len(rigid_ind_l)
 
-            for ch in range(int(mol_dict['N'])):
-                if specialLJ!=None and mol_dict['mol']=='TDP43' and n_mol_chains>1:
-                    splj_list1 = [ reordered_ind[n_prev_res+n_rigids+ ihelix] for ihelix in range(59,72)]
-                    for ch2 in range(ch+1, int(mol_dict['N'])):
-                        splj_list2 =  [ reordered_ind[n_prev_res+ (chain_lengths_list[mol]+n_rigids)*(ch2-ch) +n_rigids+ihelix] for ihelix in range(59,72)]
-                        splj_pairs += list( itertools.product(splj_list1, splj_list2) )
-                        splj_id += helix_product_typeid
-            
+            for ch in range(int(mol_dict['N'])):            
                 for nr in range(n_rigids):
                     start_rig = n_prev_res + rigid_ind_l[nr][0]
                     if start_rig > n_prev_res:
@@ -614,21 +593,6 @@ def create_init_configuration(filename, syslist, aa_param_dict, box_length, resc
     s1.bonds.typeid = [0]*len(bond_pairs_tot)
     s1.bonds.group = bond_pairs_tot
     print(s1.particles.N)
-
-    # ADD SPECIAL PAIR LJ
-    if 'splj_types' in locals():
-        s1.pairs.N = len(splj_pairs)
-        s1.pairs.types = splj_types
-        s1.pairs.typeid = splj_id
-        s1.pairs.group = splj_pairs
-        print(s1.pairs.N)
-        print(s1.pairs.types)
-        print(s1.pairs.typeid)
-        print(s1.pairs.group)
-        
-        with open(specialLJ, "w") as file:  
-            for name in splj_types:
-                file.write(f"{name}  {splj_sigma_dict[name]}\n")
 
     with gsd.hoomd.open(name=filename, mode='wb') as fout:
         fout.append(s1)
