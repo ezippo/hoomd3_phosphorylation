@@ -17,7 +17,7 @@ import hps_phosphorylation.phosphorylation as phospho
 ### -------------------------------------- PAIR POTENTIALS DEFINITION -------------------------------------------------------------
 
 ## YUKAWA: elecrostatic interaction with Debey-Huckel screening
-def yukawa_pair_potential(cell, aa_type, R_type_list, aa_charge, model='HPS', tempK=300, ionic=0.100, rescale=0):
+def yukawa_pair_potential(cell, aa_type, R_type_list, aa_charge, model='HPS', tempK=300, ionic=0.100, rescale=0, specialLJ_types=[]):
     """
     Defines Yukawa (screened electrostatic) pair potentials between particles in a system.
     
@@ -49,6 +49,12 @@ def yukawa_pair_potential(cell, aa_type, R_type_list, aa_charge, model='HPS', te
     else:
         rigid_types = []
 
+    if len(specialLJ_types)!=0:
+        specialLJ_types_normal = [tp.replace('_r_h','') for tp in specialLJ_types]
+        specialLJ_charge = [ aa_charge[aa_type.index(tp)] for tp in specialLJ_types_normal ]
+    else:
+        specialLJ_charge = []
+
     def pairwise_interactions(types1, types2, charges1, charges2, epsilon_factor, kappa, r_cut):
         """
         Helper function to set up pairwise interactions between two lists of particle types.
@@ -74,14 +80,23 @@ def yukawa_pair_potential(cell, aa_type, R_type_list, aa_charge, model='HPS', te
     # IDP-IDP interactions
     pairwise_interactions(aa_type, aa_type, aa_charge, aa_charge, 
         yukawa_eps, yukawa_kappa, r_cutoff )
+    # helix-IDP interactions
+    pairwise_interactions(specialLJ_types, aa_type, specialLJ_charge, aa_charge, 
+            yukawa_eps, yukawa_kappa, r_cutoff )
 
     # IDP-globular interactions (if rescaling is enabled)
     if rescale!=0:
         pairwise_interactions(aa_type, rigid_types, aa_charge, aa_charge, 
             yukawa_eps, yukawa_kappa, r_cutoff )
+        # helix-globular interactions (if rescaling is enabled)
+        pairwise_interactions(specialLJ_types, rigid_types, specialLJ_charge, aa_charge, 
+            yukawa_eps, yukawa_kappa, r_cutoff )
 
     # IDP-Rigid Particle interactions (fictitious particles, so no interaction)
     pairwise_interactions(aa_type, R_type_list, aa_charge, [0]*len(R_type_list),  # No interaction, charge is effectively 0
+        0, 1.0, 0.0 )    # Set epsilon and r_cut to 0 
+    # helix-Rigid Particle interactions (fictitious particles, so no interaction)
+    pairwise_interactions(specialLJ_types, R_type_list, specialLJ_charge, [0]*len(R_type_list),  # No interaction, charge is effectively 0
         0, 1.0, 0.0 )    # Set epsilon and r_cut to 0 
 
     if rescale!=0:
@@ -96,6 +111,10 @@ def yukawa_pair_potential(cell, aa_type, R_type_list, aa_charge, model='HPS', te
     # Rigid-Rigid Particle interactions (no interaction between fictitious particles)
     pairwise_interactions(R_type_list, R_type_list, [0]*len(R_type_list), [0]*len(R_type_list),  # No interaction between rigid particles
         0, 1.0, 0.0 )      # Set epsilon and r_cut to 0
+    
+    # helix-helix interactions
+    pairwise_interactions(specialLJ_types, specialLJ_types, specialLJ_charge, specialLJ_charge, 
+        0, 1.0, 0.0 )    
 
     return yukawa
 
@@ -103,7 +122,7 @@ def yukawa_pair_potential(cell, aa_type, R_type_list, aa_charge, model='HPS', te
 
 ## ASHBAUGH-HATCH
 # ashbaugh_plugin: Van der Waals interactions (with hydrophobicity screening)
-def ashbaugh_hatch_pair_potential(cell, aa_type, R_type_list, aa_sigma, aa_lambda, rescale=0):
+def ashbaugh_hatch_pair_potential(cell, aa_type, R_type_list, aa_sigma, aa_lambda, rescale=0, specialLJ_types=[]):
     """
     Defines the Ashbaugh-Hatch pair potential for interactions between particles.
 
@@ -126,6 +145,14 @@ def ashbaugh_hatch_pair_potential(cell, aa_type, R_type_list, aa_sigma, aa_lambd
     if rescale!=0:
         r_factor = 1. - rescale / 100. 
         rigid_types = [f'{name}_r' for name in aa_type] 
+
+    if len(specialLJ_types)!=0:
+        specialLJ_types_normal = [tp.replace('_r_h','') for tp in specialLJ_types]
+        specialLJ_lambda = [ aa_lambda[aa_type.index(tp)] for tp in specialLJ_types_normal ]
+        specialLJ_sigma = [ aa_sigma[aa_type.index(tp)] for tp in specialLJ_types_normal ]
+    else:
+        specialLJ_lambda = []
+        specialLJ_sigma = []
 
     def pairwise_interactions(types1, types2, sigma_list1, sigma_list2, lam_list1, lam_list2, r_factor=1.0, epsilon=eps_ashbaugh, r_cut=2.0):
         """
@@ -151,13 +178,20 @@ def ashbaugh_hatch_pair_potential(cell, aa_type, R_type_list, aa_sigma, aa_lambd
 
     # IDP-IDP interactions
     pairwise_interactions(aa_type, aa_type, aa_sigma, aa_sigma, aa_lambda, aa_lambda)
+    # helix-IDP interactions
+    pairwise_interactions(specialLJ_types, aa_type, specialLJ_sigma, aa_sigma, specialLJ_lambda, aa_lambda, r_factor=r_factor )
 
     # IDP-globular interactions (if rescaling is enabled)
     if rescale!=0:
         pairwise_interactions(aa_type, rigid_types, aa_sigma, aa_sigma, aa_lambda, aa_lambda, r_factor=r_factor)
+        # helix-globular interactions
+        pairwise_interactions(specialLJ_types, rigid_types, specialLJ_sigma, aa_sigma, specialLJ_lambda, aa_lambda, r_factor=r_factor*r_factor )
 
     # IDP-R particle interactions (virtual particles, so no interaction)
     pairwise_interactions(aa_type, R_type_list, [0]*len(aa_type), [0]*len(R_type_list), [0]*len(aa_type), [0]*len(R_type_list), 
+        epsilon=0, r_cut=0)
+    # helix-R particle interactions (virtual particles, so no interaction)
+    pairwise_interactions(specialLJ_types, R_type_list, [0]*len(specialLJ_types), [0]*len(R_type_list), [0]*len(specialLJ_types), [0]*len(R_type_list), 
         epsilon=0, r_cut=0)
 
     # Globular-globular interactions (if rescaling is enabled)
@@ -172,11 +206,14 @@ def ashbaugh_hatch_pair_potential(cell, aa_type, R_type_list, aa_sigma, aa_lambd
     pairwise_interactions(R_type_list, R_type_list, [0]*len(R_type_list), [0]*len(R_type_list), [0]*len(R_type_list), [0]*len(R_type_list), 
         epsilon=0, r_cut=0)
 
+    # helix-helix interactions
+    pairwise_interactions(specialLJ_types, specialLJ_types, specialLJ_sigma, specialLJ_sigma, specialLJ_lambda, specialLJ_lambda, r_factor=r_factor*r_factor )  
+
     return ashbaugh
 
 
 # hoomd3 Lennard-Jones potential: cation-pi interaction (with hydrophobicity screening)
-def cation_pi_lj_potential(cell, aa_type, R_type_list, aa_sigma, rescale=0):
+def cation_pi_lj_potential(cell, aa_type, R_type_list, aa_sigma, rescale=0, specialLJ_types=[]):
     """
     Defines the Lennard-Jones pair potential for interactions between positively charged (cation) and aromatic (pi) amino acids.
 
@@ -206,6 +243,22 @@ def cation_pi_lj_potential(cell, aa_type, R_type_list, aa_sigma, rescale=0):
         pi_type += ["PHE_r", "TRP_r", "TYR_r"]
         logging.debug(f"INTERACTIONS: rescale factor {r_factor}")
 
+    if len(specialLJ_types)!=0:
+        specialLJ_types_normal = [tp.replace('_r_h','') for tp in specialLJ_types]
+        specialLJ_sigma = [ aa_sigma[aa_type.index(tp)] for tp in specialLJ_types_normal ]
+        if "ARG" in specialLJ_types_normal:
+            cation_type += ["ARG_r_h"]
+        if "LYS" in specialLJ_types_normal:
+            cation_type += ["LYS_r_h"]
+        if "PHE" in specialLJ_types_normal:
+            pi_type += ["PHE_r_h"]
+        if "TRP" in specialLJ_types_normal:
+            pi_type += ["TRP_r_h"]
+        if "TYR" in specialLJ_types_normal:
+            pi_type += ["TYR_r_h"]
+    else:
+        specialLJ_sigma = []
+
     def pairwise_interactions(types1, types2, sigma_list1, sigma_list2, epsilon=eps_catpi, r_cut=2.0, rescale_factor=1.0):
         """
         Helper function to loop over and set pairwise interactions between two sets of particle types.
@@ -231,13 +284,19 @@ def cation_pi_lj_potential(cell, aa_type, R_type_list, aa_sigma, rescale=0):
 
     # IDP-IDP interactions
     pairwise_interactions(aa_type, aa_type, aa_sigma, aa_sigma)
+    # helix-IDP interactions
+    pairwise_interactions(specialLJ_types, aa_type, specialLJ_sigma, aa_sigma, rescale_factor=r_factor)
 
     # IDP-globular interactions if rescale is enabled
     if rescale!=0:
         pairwise_interactions(aa_type, rigid_types, aa_sigma, aa_sigma, rescale_factor=r_factor)
+        # helix-globular interactions
+        pairwise_interactions(specialLJ_types, rigid_types, specialLJ_sigma, aa_sigma, rescale_factor=r_factor*r_factor)
 
     # IDP-R particle interactions (no interaction with virtual particles)
     pairwise_interactions(aa_type, R_type_list, aa_sigma, [0] * len(R_type_list), epsilon=0, r_cut=0)
+    # helix-R particle interactions (no interaction with virtual particles)
+    pairwise_interactions(specialLJ_types, R_type_list, specialLJ_sigma, [0] * len(R_type_list), epsilon=0, r_cut=0)
 
     # Globular-globular interactions if rescale is enabled
     if rescale:
@@ -248,6 +307,9 @@ def cation_pi_lj_potential(cell, aa_type, R_type_list, aa_sigma, rescale=0):
 
     # R-R particle interactions (no interaction between virtual particles)
     pairwise_interactions(R_type_list, R_type_list, [0] * len(R_type_list), [0] * len(R_type_list), epsilon=0, r_cut=0)
+
+    # helix-helix interactions
+    pairwise_interactions(specialLJ_types, specialLJ_types, specialLJ_sigma, specialLJ_sigma, rescale_factor=r_factor*r_factor)
 
     return cation_pi_lj
 
@@ -545,7 +607,7 @@ def create_init_configuration(filename, syslist, aa_param_dict, box_length, resc
     if rescale:
         s.particles.types += aa_type_r
 
-    if specialLJ!=None:
+    if specialLJ:
         rigid.body['R1']["constituent_types"] = [ rigid.body['R1']["constituent_types"][i]+'_h' for i in range(len(rigid.body['R1']["constituent_types"])) ]
         s.particles.types += list(set(rigid.body['R1']["constituent_types"]))
     
@@ -854,6 +916,8 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
     rigid, rigid_masses_l, n_rigids_l, R_type_list = hu.rigidbodies_from_syslist(syslist, chain_lengths_l, aa_param_dict, rescale)
     logging.debug(f"RIGID : rigid names: {R_type_list}")
     logging.debug(f"RIGID : n_rigids_l: {n_rigids_l}")
+    if specialLJ:
+        rigid.body['R1']["constituent_types"] = [ rigid.body['R1']["constituent_types"][i]+'_h' for i in range(len(rigid.body['R1']["constituent_types"])) ]
     
     # phosphosite
     # id_Ser_types = list( np.where( np.isin( snap.particles.types, ['SER','SER_r']))[0] )  # id number of the type Ser in free chain and rigid body 
@@ -901,18 +965,15 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
             harmonic.params[net_name] = dict(k=8033, r0=net_distance)
         for net_name, net_distance in zip(network_names, network_distances):
             harmonic.params[net_name] = dict(k=700, r0=net_distance)
-
-    # special pair LJ
-    if specialLJ!=None:
-        special_pair_lj = hoomd.md.special_pair.LJ()
-        with open(specialLJ, "r") as file:
-            for line in file:
-                splj_name, splj_sigma = line.split()
-                special_pair_lj.params[splj_name] = dict(epsilon=temp/10, sigma=splj_sigma)
-                special_pair_lj.r_cut[splj_name] = 2.0
         
     # electrostatics forces
-    yukawa = yukawa_pair_potential(cell, aa_type, R_type_list, aa_charge, model, production_T, ionic, rescale)
+    if specialLJ:
+        specialLJ_types = snap.particles.types[len(aa_type)*2+len(R_type_list):]
+        print(specialLJ_types)
+    else:
+        specialLJ_types = []
+
+    yukawa = yukawa_pair_potential(cell, aa_type, R_type_list, aa_charge, model, production_T, ionic, rescale, specialLJ_types=specialLJ_types)
     
     # nonbonded: ashbaugh-hatch potential
     # ashbaugh_table = ashbaugh_hatch_pair_potential(cell, aa_type, R_type_list, aa_sigma, aa_lambda, model, rescale)
@@ -942,8 +1003,6 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
     
     # forces 
     integrator.forces.append(harmonic)
-    if specialLJ!=None:
-        integrator.forces.append(special_pair_lj)
     integrator.forces.append(yukawa)
     # integrator.forces.append(ashbaugh_table)
     integrator.forces.append(ashbaugh)
@@ -978,8 +1037,6 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
         tq_log.add(ashbaugh, quantities=['energies'])
         if model=='HPS_cp':
             tq_log.add(cationpi_lj, quantities=['energies'])
-        if specialLJ!=None:
-            tq_log.add(special_pair_lj, quantities=['energies', 'forces'])
     tq_gsd = hoomd.write.GSD(trigger=hoomd.trigger.Periodic(dt_log), 
                              filename=logfile+'_log.gsd', filter=hoomd.filter.Null(),
                              log=tq_log)
