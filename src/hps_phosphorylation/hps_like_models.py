@@ -16,6 +16,86 @@ import hps_phosphorylation.phosphorylation as phospho
 
 ### -------------------------------------- PAIR POTENTIALS DEFINITION -------------------------------------------------------------
 
+## LJ for helix-helix interacations
+def specialLJ_pair_potential(cell, aa_type, R_type_list, aa_sigma, temp, rescale, specialLJ_types):
+    """
+    Defines the LJ pair potential for interactions between helix types.
+
+    Parameters:
+    - cell: HOOMD neighbor list object.
+    - aa_type: List of amino acid types.
+    - R_type_list: List of virtual rigid body particle types.
+    - aa_sigma: List of sigma values corresponding to amino acid types.
+    - temp: temperature in kJ/mol.
+    - rescale: Percentage value for rescaling globular particles (default 0).
+    - specialLJ_types: helix types for which the force is not zero
+
+    Returns:
+    - specialLJ_potential: HOOMD LJ pair potential object.
+    """
+    
+    specialLJ_potential = hoomd.md.pair.LJ(nlist=cell)
+    eps_lj = temp/10.  # LJ epsilon value
+    
+    # Rescale factor and modified rigid types if rescale is applied
+    if rescale!=0:
+        rigid_types = [f'{name}_r' for name in aa_type] 
+
+    specialLJ_types_normal = [tp.replace('_r_h','') for tp in specialLJ_types]
+    specialLJ_sigma = [ aa_sigma[aa_type.index(tp)] for tp in specialLJ_types_normal ]
+
+    def pairwise_interactions(types1, types2, sigma_list1, sigma_list2, epsilon=eps_lj, r_cut=2.0):
+        """
+        Helper function to loop over and set pairwise interactions between two sets of particle types.
+        
+        Parameters:
+        - types1, types2: Lists of particle types.
+        - sigma_list1, sigma_list2: Lists of sigma values corresponding to the particle types.
+        - r_factor: Rescale factor for lambda (default 1.0).
+        - epsilon: LJ epsilon value.
+        - r_cut: The cutoff distance for the interaction (default 2.0).
+        """
+        for atom1, sigma1 in zip(types1, sigma_list1):
+            for atom2, sigma2 in zip(types2, sigma_list2):
+                sigma = (sigma1 + sigma2) / 2.0
+                # Set Ashbaugh pair potential parameters
+                specialLJ_potential.params[(atom1, atom2)] = dict(epsilon=epsilon, sigma=sigma)
+                specialLJ_potential.r_cut[(atom1, atom2)] = r_cut
+                logging.debug(f"INTERACTIONS: specialLJ_potential {atom1}-{atom2} : {specialLJ_potential.params[(atom1, atom2)]}, r_cut={specialLJ_potential.r_cut[(atom1, atom2)]}")
+
+
+    # IDP-IDP interactions
+    pairwise_interactions(aa_type, aa_type, aa_sigma, aa_sigma, epsilon=0, r_cut=0)
+    # helix-IDP interactions
+    pairwise_interactions(specialLJ_types, aa_type, specialLJ_sigma, aa_sigma, epsilon=0, r_cut=0 )
+
+    # IDP-globular interactions (if rescaling is enabled)
+    if rescale!=0:
+        pairwise_interactions(aa_type, rigid_types, aa_sigma, aa_sigma, epsilon=0, r_cut=0)
+        # helix-globular interactions
+        pairwise_interactions(specialLJ_types, rigid_types, specialLJ_sigma, aa_sigma, epsilon=0, r_cut=0 )
+
+    # IDP-R particle interactions (virtual particles, so no interaction)
+    pairwise_interactions(aa_type, R_type_list, [0]*len(aa_type), [0]*len(R_type_list), epsilon=0, r_cut=0)
+    # helix-R particle interactions (virtual particles, so no interaction)
+    pairwise_interactions(specialLJ_types, R_type_list, [0]*len(specialLJ_types), [0]*len(R_type_list), epsilon=0, r_cut=0)
+
+    # Globular-globular interactions (if rescaling is enabled)
+    if rescale!=0:
+        pairwise_interactions(rigid_types, rigid_types, aa_sigma, aa_sigma, epsilon=0, r_cut=0)
+
+        # Globular-R particle interactions (virtual particles, so no interaction)
+        pairwise_interactions(rigid_types, R_type_list, [0]*len(rigid_types), [0]*len(R_type_list), epsilon=0, r_cut=0)
+
+    # R-R particle interactions (no interaction between virtual particles)
+    pairwise_interactions(R_type_list, R_type_list, [0]*len(R_type_list), [0]*len(R_type_list), epsilon=0, r_cut=0)
+
+    # helix-helix interactions
+    pairwise_interactions(specialLJ_types, specialLJ_types, specialLJ_sigma, specialLJ_sigma, epsilon=eps_lj, r_cut=2.0)  
+
+    return specialLJ_potential
+
+
 ## YUKAWA: elecrostatic interaction with Debey-Huckel screening
 def yukawa_pair_potential(cell, aa_type, R_type_list, aa_charge, model='HPS', tempK=300, ionic=0.100, rescale=0, specialLJ_types=[]):
     """
@@ -970,6 +1050,7 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
     if specialLJ:
         specialLJ_types = snap.particles.types[len(aa_type)*2+len(R_type_list):]
         print(specialLJ_types)
+        specialLJ_potential = specialLJ_pair_potential(cell, aa_type, R_type_list, aa_sigma, temp, rescale, specialLJ_types)
     else:
         specialLJ_types = []
 
@@ -1008,6 +1089,8 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
     integrator.forces.append(ashbaugh)
     if model=='HPS_cp':
         integrator.forces.append(cationpi_lj)
+    if specialLJ:
+        integrator.forces.append(specialLJ_potential)
     integrator.methods.append(langevin)
     
     # ## LOGGING
