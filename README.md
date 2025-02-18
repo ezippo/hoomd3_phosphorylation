@@ -36,7 +36,7 @@ The code is also available in PyPI-test and it can be installed by using the fol
   pip install -i https://test.pypi.org/simple/ hps-phosphorylation
 
 Copy the python script *main.py* to run the code.
-
+The installation time should be just few seconds.
 
 ### Usage
 
