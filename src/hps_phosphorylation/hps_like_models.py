@@ -843,9 +843,14 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
     logging.debug(f"FIRST SNAPSHOT : typeid: {list(type_id)}")
     
     # rigid bodies 
-    rigid, rigid_masses_l, n_rigids_l, R_type_list = hu.rigidbodies_from_syslist(syslist, chain_lengths_l, aa_param_dict, rescale)
-    logging.debug(f"RIGID : rigid names: {R_type_list}")
-    logging.debug(f"RIGID : n_rigids_l: {n_rigids_l}")
+    if network==None:
+        rigid, rigid_masses_l, n_rigids_l, R_type_list = hu.rigidbodies_from_syslist(syslist, chain_lengths_l, aa_param_dict, rescale)
+        logging.debug(f"RIGID : rigid names: {R_type_list}")
+        logging.debug(f"RIGID : n_rigids_l: {n_rigids_l}")
+    else:
+        R_type_list = []
+        n_rigids_l = [0]*n_mols
+        rigid_masses_l = []
     
     # phosphosite
     id_Ser_types = list( np.where( np.isin( snap.particles.types, ['SER','SER_r']))[0] )  # id number of the type Ser in free chain and rigid body 
@@ -855,7 +860,10 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
     logging.debug(f"PHOSPHOSITES : ser_serials: {ser_serials}")
 
     # active site
-    active_serials_l = phospho.activesites_from_syslist(syslist, chain_lengths_l, n_rigids_l)
+    if network==None:
+        active_serials_l = phospho.activesites_from_syslist(syslist, chain_lengths_l, n_rigids_l)
+    else:
+        active_serials_l = phospho.activesites_from_syslist_network(syslist, chain_lengths_l)
     logging.debug(f"ACTIVE SITES : active_serials list: {active_serials_l}")
 
     # groups
@@ -905,8 +913,11 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
         cationpi_lj = cation_pi_lj_potential(cell, aa_type, R_type_list, aa_sigma, rescale)
 
     # ## INTEGRATOR
-    integrator = hoomd.md.Integrator(production_dt, integrate_rotational_dof=True)        
-    
+    if network==None:
+        integrator = hoomd.md.Integrator(production_dt, integrate_rotational_dof=True)        
+    else:
+        integrator = hoomd.md.Integrator(production_dt, integrate_rotational_dof=False)        
+
     # method : Langevin thermostat
     langevin = hoomd.md.methods.Langevin(filter=moving_group, kT=temp)
     for i,name in enumerate(aa_type):
@@ -921,7 +932,8 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
         langevin.gamma_r['R'+str(i+1)] = (4.0, 4.0, 4.0)
         
     # constraints : rigid body
-    integrator.rigid = rigid
+    if network==None:
+        integrator.rigid = rigid
     
     # forces 
     integrator.forces.append(harmonic)
