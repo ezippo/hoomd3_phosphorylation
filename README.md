@@ -7,6 +7,8 @@ Supporting data can be found on the Zenodo platform (Zippo, E. (2024). Supportin
 
 It contains the framework to easily run coarse-grained Molecular Dynamics (MD) simulations of multi-domain proteins with phosphorylation reaction Monte Carlo steps using HPS-derived models<sup>1</sup>.
 
+This version contains a flag to add Lennard-Jones attractive forces between residue in the conserved region of TDP-43 LCD (residues 320-332). Keep in mind this part of the code was explicitly written for the specific case of TDP-43 LCD simulations, the molacule TDP-43 LCD must be declared first in the system file. 
+
 ## Overview
 - **src/hps_phosphorylation/**: *hps_phosphorylation* code to run MD simulation with phosphorylation reaction.
 - **example/**: folder with examples of usage of *hps_phosphorylation*.
@@ -69,6 +71,9 @@ You can specify the input parameters and the type of simulation you want through
                         step is added. If 'nophospho' phosphorylation and exchange are deactivated.
 
   --logenergy    :   If specified, the log file will store also the potential energy acting on each particle for each pair potential.
+
+  -sp , --specialLJ  :  If specified, add a Lennard-Jones potential with depth of k_B T/10 between each pairs of beads belonging to 2 different conserved regions of TDP-43 LCD (residues 320-332).
+
 
 **Input file**
 
