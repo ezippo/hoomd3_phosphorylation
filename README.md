@@ -36,7 +36,7 @@ The code is also available in PyPI-test and it can be installed by using the fol
   pip install -i https://test.pypi.org/simple/ hps-phosphorylation
 
 Copy the python script *main.py* to run the code.
-
+The installation time should be just few seconds.
 
 ### Usage
 
@@ -49,15 +49,15 @@ You can specify the input parameters and the type of simulation you want through
                         initial configuration, the box can be resized during the simulation using the flag '-br'. Give only one
                         number in the input 'box' of the input file.
                         
-  -m {HPS,HPS_cp,CALVADOS2}, --model {HPS,HPS_cp,CALVADOS2}  :  
+  -m {HPS,CALVADOS}, --model {HPS,CALVADOS}  :  
                         The code will run in simulation mode. The argument of this flag must be the name of the coarse-grained
-                        model to use in the simulation: HPS for HPS model<sup>2</sup>, HPS_cp for HPS plus cation-pi enhanced interactions<sup>4</sup>, CALVADOS2 for CALVADOS2 model<sup>3</sup>.
+                        model to use in the simulation: HPS for HPS model<sup>2</sup> or HPS plus cation-pi enhanced interactions<sup>3</sup>, CALVADOS for CALVADOS models (1,2 or 3) <sup>4,5,6</sup>.
                         It can not be used together with '-c'.
                         
   -i INFILE, --infile INFILE  :  Input file with simulation parameters, logging file name and parameters, system file name.
                         
   -r RESCALE, --rescale RESCALE  :    
-                        Scale down rigid body interaction by 'RESCALE' percentage<sup>5</sup>. To use also in 'create_initial_configuration' mode to
+                        Scale down rigid body interaction by 'RESCALE' percentage<sup>7</sup>. To use also in 'create_initial_configuration' mode to
                         incude the rescaled rigid body types (value of argmuent not important in this case).
                         
   -br BOXRESIZE BOXRESIZE BOXRESIZE, --boxresize BOXRESIZE BOXRESIZE BOXRESIZE  :  
@@ -92,8 +92,10 @@ A correct input file must contain the following entries:
   - 'box' = box side lengths Lx,Ly,Lz in nm (or just Lx for cubic boxes and for 'create_initial_configuration' mode);
   - 'start' = 0->new simulation, 1->restart simulation;
   - 'contact_dist' = distance in nm for contact with active site in phosphorylation step;
+  - 'bath_dist' = distance in nm for considering enzyme and substrate far enough for the reservoir exchange step. Necessary in simulation mode "ness";
   - 'Dmu' = chemical potential bias for phosphorylation step in kJ/mol (mu_adp-mu_atp), 1 entry for every enzyme in simulation;
   - 'dt_try_change' = time interval in MD steps to try phosphorylation step;
+  - 'dt_bath' = time interval in MD steps to try reservoir exchange step. Necessary in simulation mode "ness";
   - 'seed' = seed for random number generator.
 2. Logging time interval:
   - 'dt_dump' = time interval in MD steps to save trajectory file;
@@ -137,11 +139,14 @@ disordered proteins and their condensates, *bioRxiv* (2024), doi: https://doi.or
 <small>2) Dignon, G. L., Zheng, W., Kim, Y. C., Best, R. B. & Mittal, J. Sequence determinants of
 protein phase behavior from a coarse-grained model, *PLoS Comput. Biol.* 14, e1005941 (2018) </small>
 
-<small>3) Tesei, G. & Lindorff-Larsen, K. Improved predictions of phase behaviour of intrinsically disordered proteins by tuning the interaction range, *Open
-Research Europe* 2 (2023) </small>
-
-<small>4) Tejedor, A. R., Garaizar, A., Ramírez, J. & Espinosa, J. R. ‘RNA modulation of transport
+<small>3) Tejedor, A. R., Garaizar, A., Ramírez, J. & Espinosa, J. R. ‘RNA modulation of transport
 properties and stability in phase-separated condensates, *Biophysical Journal* 120, 5169–5186 (2021) </small>
 
-<small>5)  Krainer, G. et al. Reentrant liquid condensate phase of proteins is stabilized by hydrophobic
+<small>4) Tesei G., Schulze T. K., Crehuet R., Lindorff-Larsen K.  Accurate model of liquid-liquid phase behavior of intrinsically disordered proteins from optimization of single-chain properties, *PNAS* (2021), 118(44):e2111696118 </small>
+
+<small>5) Tesei G., Lindorff-Larsen K.  Improved predictions of phase behaviour of intrinsically disordered proteins by tuning the interaction range, *Open Research Europe* (2022), 2(94). </small>
+
+<small>6) Cao F., von Bülow S., Tesei G., Lindorff-Larsen K.  A coarse-grained model for disordered and multi-domain proteins, *Protein Science* (2024), 33(11):e5172 </small>
+
+<small>7)  Krainer, G. et al. Reentrant liquid condensate phase of proteins is stabilized by hydrophobic
 and non-ionic interactions, *Biophysical Journal* 120, 28a (2021) </small>
