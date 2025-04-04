@@ -365,13 +365,13 @@ def cation_pi_lj_potential(cell, aa_type, R_type_list, aa_sigma, rescale=0, spec
     # IDP-IDP interactions
     pairwise_interactions(aa_type, aa_type, aa_sigma, aa_sigma)
     # helix-IDP interactions
-    pairwise_interactions(specialLJ_types, aa_type, specialLJ_sigma, aa_sigma, rescale_factor=r_factor)
+    pairwise_interactions(specialLJ_types, aa_type, specialLJ_sigma, aa_sigma)
 
     # IDP-globular interactions if rescale is enabled
     if rescale!=0:
         pairwise_interactions(aa_type, rigid_types, aa_sigma, aa_sigma, rescale_factor=r_factor)
         # helix-globular interactions
-        pairwise_interactions(specialLJ_types, rigid_types, specialLJ_sigma, aa_sigma, rescale_factor=r_factor*r_factor)
+        pairwise_interactions(specialLJ_types, rigid_types, specialLJ_sigma, aa_sigma)
 
     # IDP-R particle interactions (no interaction with virtual particles)
     pairwise_interactions(aa_type, R_type_list, aa_sigma, [0] * len(R_type_list), epsilon=0, r_cut=0)
@@ -389,7 +389,7 @@ def cation_pi_lj_potential(cell, aa_type, R_type_list, aa_sigma, rescale=0, spec
     pairwise_interactions(R_type_list, R_type_list, [0] * len(R_type_list), [0] * len(R_type_list), epsilon=0, r_cut=0)
 
     # helix-helix interactions
-    pairwise_interactions(specialLJ_types, specialLJ_types, specialLJ_sigma, specialLJ_sigma, rescale_factor=r_factor*r_factor)
+    pairwise_interactions(specialLJ_types, specialLJ_types, specialLJ_sigma, specialLJ_sigma)
 
     return cation_pi_lj
 
