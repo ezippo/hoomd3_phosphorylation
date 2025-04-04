@@ -259,13 +259,13 @@ def ashbaugh_hatch_pair_potential(cell, aa_type, R_type_list, aa_sigma, aa_lambd
     # IDP-IDP interactions
     pairwise_interactions(aa_type, aa_type, aa_sigma, aa_sigma, aa_lambda, aa_lambda)
     # helix-IDP interactions
-    pairwise_interactions(specialLJ_types, aa_type, specialLJ_sigma, aa_sigma, specialLJ_lambda, aa_lambda, r_factor=r_factor )
+    pairwise_interactions(specialLJ_types, aa_type, specialLJ_sigma, aa_sigma, specialLJ_lambda, aa_lambda)
 
     # IDP-globular interactions (if rescaling is enabled)
     if rescale!=0:
         pairwise_interactions(aa_type, rigid_types, aa_sigma, aa_sigma, aa_lambda, aa_lambda, r_factor=r_factor)
         # helix-globular interactions
-        pairwise_interactions(specialLJ_types, rigid_types, specialLJ_sigma, aa_sigma, specialLJ_lambda, aa_lambda, r_factor=r_factor*r_factor )
+        pairwise_interactions(specialLJ_types, rigid_types, specialLJ_sigma, aa_sigma, specialLJ_lambda, aa_lambda)
 
     # IDP-R particle interactions (virtual particles, so no interaction)
     pairwise_interactions(aa_type, R_type_list, [0]*len(aa_type), [0]*len(R_type_list), [0]*len(aa_type), [0]*len(R_type_list), 
@@ -287,7 +287,7 @@ def ashbaugh_hatch_pair_potential(cell, aa_type, R_type_list, aa_sigma, aa_lambd
         epsilon=0, r_cut=0)
 
     # helix-helix interactions
-    pairwise_interactions(specialLJ_types, specialLJ_types, specialLJ_sigma, specialLJ_sigma, specialLJ_lambda, specialLJ_lambda, r_factor=r_factor*r_factor )  
+    pairwise_interactions(specialLJ_types, specialLJ_types, specialLJ_sigma, specialLJ_sigma, specialLJ_lambda, specialLJ_lambda)  
 
     return ashbaugh
 
