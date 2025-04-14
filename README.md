@@ -1,4 +1,5 @@
 # hoomd3_phosphorylation
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.15207491.svg)](https://doi.org/10.5281/zenodo.15207491)
 
 Repository with code used in Zippo, E., Dormann, D., Speck, T. & Stelzl, L.L. Molecular simulations of enzymatic phosphorylation of
 disordered proteins and their condensates, *bioRxiv* (2024), doi: https://doi.org/10.1101/2024.08.15.607948 .
