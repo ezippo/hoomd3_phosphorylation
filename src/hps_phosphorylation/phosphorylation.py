@@ -437,7 +437,7 @@ def phosphosites_from_syslist_network(syslist, type_id, chain_lengths_l, id_ser_
             elif len(ser_specific) != 1:
                 raise ValueError(f"phospho-sites are not correctly specified in molecule {mol_dict['mol']}")
 
-            tmp_serials = prev_res + np.where(tmp_mask)[0]
+            tmp_serials = list(prev_res + np.where(tmp_mask)[0])
         
         else:
             # extract phosphosites from specific indices
