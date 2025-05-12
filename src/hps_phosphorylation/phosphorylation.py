@@ -385,6 +385,73 @@ def phosphosites_from_syslist(syslist, type_id, chain_lengths_l, n_rigids_l, id_
     return phosphosites
 
 
+def phosphosites_from_syslist_network(syslist, type_id, chain_lengths_l, id_ser_types=[15,20]):
+    """
+    Extracts phosphosite serials from a system list.
+
+    This function processes a system list to determine the indices of phosphosites
+    in each molecule based on the type IDs and specified phospho-site information.
+    Used when the elastic network is active.
+
+    Args:
+        syslist (list of dict): List of dictionaries, where each dictionary represents a molecule.
+        type_id (list of int): List of type IDs for particles.
+        chain_lengths_l (list of int): List of chain lengths for each molecule.
+        id_ser_types (list of int): List of IDs number associated with Ser and pSer in free chain and rigid body. Default [15,20] (no rigid body).
+
+    Returns:
+        list of int: List of reordered indices corresponding to phosphosites.
+    """
+    # Reorder the system list indices for consistency
+    n_mols = len(syslist)
+    phosphosites = []
+    prev_res = 0     
+
+    for mol in range(n_mols):
+        mol_dict = syslist[mol]
+        n_mol_chains = int(mol_dict['N'])
+        end_index = int(n_mol_chains * chain_lengths_l[mol])   # last index for molecules of type mol_dict['mol']
+        
+        # phosphosites specification: '0'=no phosphosites, 'SER'=all Ser/pSer, 'SER:start-end'=Ser/pSer from start index to end index, {x1,x2,x3,...}=residue index x1,x2,x3,...
+        phospho_sites = mol_dict['phospho_sites']
+        
+        if phospho_sites == '0':
+            # No phospho-sites specified
+            tmp_serials = []
+
+        elif phospho_sites.startswith('SER'):
+            ser_specific = phospho_sites.rsplit(":")
+            # mask for Ser/pSer residues in type_id of molecules mol_dict['mol']
+            tmp_mask = np.isin(type_id[prev_res:prev_res + end_index], id_ser_types)  
+
+            if len(ser_specific) == 2:
+                # extract Ser/pSer only in a specific range ('SER:start-end')
+                start_ser_ind, end_ser_ind = np.array(ser_specific[1].rsplit("-"), dtype=int) - 1
+                # loop over chains of same species
+                for nc in range(n_mol_chains):
+                    # turn to False the elements of mask outside the range 'start-end'
+                    chain_start = nc * chain_lengths_l[mol]
+                    chain_end = chain_start + chain_lengths_l[mol]
+                    tmp_mask[chain_start:chain_start + start_ser_ind] = False
+                    tmp_mask[chain_start + end_ser_ind + 1:chain_end] = False
+            elif len(ser_specific) != 1:
+                raise ValueError(f"phospho-sites are not correctly specified in molecule {mol_dict['mol']}")
+
+            tmp_serials = prev_res + np.where(tmp_mask)[0]
+        
+        else:
+            # extract phosphosites from specific indices
+            tmp_list = list(map(int, phospho_sites.rsplit(',')))
+            tmp_serials = []
+            for nc in range(n_mol_chains):
+                tmp_serials += list(np.array(tmp_list)-1 + prev_res + nc * chain_lengths_l[mol])
+        
+        phosphosites += tmp_serials
+        prev_res += end_index
+    
+    return phosphosites
+
+
 def activesites_from_syslist(syslist, chain_lengths_l, n_rigids_l):
     """
     Extracts active site indices from a system list.
@@ -426,7 +493,19 @@ def activesites_from_syslist(syslist, chain_lengths_l, n_rigids_l):
 
 
 def activesites_from_syslist_network(syslist, chain_lengths_l):
+    """
+    Extracts active site indices from a system list.
 
+    Processes the system list to determine the indices of active sites for each molecule.
+    Used when the elastic network is active.
+
+    Args:
+        syslist (list of dict): List of dictionaries, where each dictionary represents a molecule.
+        chain_lengths_l (list of int): List of chain lengths for each molecule.
+
+    Returns:
+        list of int: List of reordered indices corresponding to active sites.
+    """
     n_mols = len(syslist)
     activesites = []
     prev_res = 0 

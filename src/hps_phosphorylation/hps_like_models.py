@@ -853,10 +853,10 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
         rigid_masses_l = []
     
     # phosphosite
-    id_Ser_types = list( np.where( np.isin( snap.particles.types, ['SER','SER_r']))[0] )  # id number of the type Ser in free chain and rigid body 
-    id_pSer_types = list( np.where( np.isin( snap.particles.types, ['SEP','SEP_r']))[0] )  # id number of the type pSer in free chain and rigid body 
-    ser_serials = phospho.phosphosites_from_syslist(syslist, type_id, chain_lengths_l, n_rigids_l, id_Ser_types+id_pSer_types)
-    logging.debug(f"PHOSPHOSITES : id_Ser_types+id_pSer_types: {id_Ser_types+id_pSer_types}")
+    if network==None:
+        ser_serials = phospho.phosphosites_from_syslist(syslist, type_id, chain_lengths_l, n_rigids_l)
+    else:
+        ser_serials = phospho.phosphosites_from_syslist_network(syslist, type_id, chain_lengths_l)
     logging.debug(f"PHOSPHOSITES : ser_serials: {ser_serials}")
 
     # active site
