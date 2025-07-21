@@ -1047,7 +1047,7 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
     
     # # Box resize
     if resize != None:
-        ramp = hoomd.variant.Ramp(A=0, B=1, t_start=init_step, t_ramp=production_steps-init_step)
+        ramp = hoomd.variant.Ramp(A=0, B=1, t_start=init_step, t_ramp=production_steps-init_step-100)
         initial_box = sim.state.box
         final_box = hoomd.Box(Lx=resize[0], Ly=resize[1], Lz=resize[2])
         box_resize_trigger = hoomd.trigger.Periodic(10)
