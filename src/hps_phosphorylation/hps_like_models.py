@@ -1027,7 +1027,7 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
                     bath_actions_l += [ phospho.ReservoirExchange(active_serials=active_serial, ser_serials=ser_serials, 
                                             forces=forces_list, glb_changes=changes, temp=temp, 
                                             Dmu=float(Dmu_array[i]), box_size=box_size, bath_dist=bath_dist)]
-                    bath_updaters_l += [ hoomd.update.CustomUpdater(action=bath_actions_l[-1], trigger=hoomd.trigger.Periodic(dt_bath, phase=i)) ]
+                    bath_updaters_l += [ hoomd.update.CustomUpdater(action=bath_actions_l[-1], trigger=hoomd.trigger.Periodic(dt_bath)) ]
 
                 # backup action
                 changes_action = phospho.ChangesBackUp(glb_changes=changes, logfile=logfile)
@@ -1039,7 +1039,7 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
                 changeser_actions_l += [ phospho.ChangeSerine(active_serials=active_serial, ser_serials=ser_serials, forces=forces_list, 
                                             glb_contacts=contacts, temp=temp, Dmu=float(Dmu_array[i]), box_size=box_size, contact_dist=contact_dist, 
                                             enzyme_ind=i, glb_changes=changes) ]
-                changeser_updaters_l += [ hoomd.update.CustomUpdater(action=changeser_actions_l[-1], trigger=hoomd.trigger.Periodic(dt_try_change, phase=i)) ]
+                changeser_updaters_l += [ hoomd.update.CustomUpdater(action=changeser_actions_l[-1], trigger=hoomd.trigger.Periodic(dt_try_change)) ]
 
         # backup action    
         contacts_action = phospho.ContactsBackUp(glb_contacts=contacts, logfile=logfile)
