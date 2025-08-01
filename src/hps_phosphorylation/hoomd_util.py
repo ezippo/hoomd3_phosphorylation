@@ -233,8 +233,8 @@ def system_from_file(filename):
     Returns
     -------
     dict_list : list of dicts
-        [ dict('mol1': ['pdb1', 'N1', 'rigid1', 'active_sites1', 'phospho_sites1']), 
-          dict('mol2': ['pdb2', 'N2', 'rigid2', 'active_sites2', 'phospho_sites2']),
+        [ dict('mol1': ['pdb1', 'N1', 'rigid1', 'active_sites1', 'phospho_sites1', 'wall_radius1']), 
+          dict('mol2': ['pdb2', 'N2', 'rigid2', 'active_sites2', 'phospho_sites2', 'wall_radius2']),
           ... ]
     '''
     dict_list = []
@@ -249,6 +249,10 @@ def system_from_file(filename):
                 mol_dict['rigid'] = line_list[3]    # rigid body indexes
                 mol_dict['active_sites'] = line_list[4]    # active site indexes
                 mol_dict['phospho_sites'] = line_list[5]    # phospho site indexes
+                if len(line_list)==6:
+                    mol_dict['wall_radius'] = 0
+                else:
+                    mol_dict['wall_radius'] = line_list[6]   # radius wall
                 dict_list += [mol_dict]
                 
     return dict_list

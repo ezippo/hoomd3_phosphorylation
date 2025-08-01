@@ -351,7 +351,6 @@ def table_ashbaugh_pair_potential(cell, aa_type, R_type_list, aa_sigma, aa_lambd
     return ashbaugh_table
 
 
-
 ### --------------------------------- CREATE INITIAL CONFIGURATION MODE ------------------------------------------------
 
 def create_init_configuration(filename, syslist, aa_param_dict, box_length, rescale=0):
@@ -591,7 +590,7 @@ def create_init_configuration(filename, syslist, aa_param_dict, box_length, resc
         fout.close()
 
 
-def create_init_configuration_network(filename, network_file, syslist, aa_param_dict, box_length, rescale=0):
+def create_init_configuration_network(filename, network_file, syslist, aa_param_dict, box_length, rescale=0, wall=None):
     """
     Create an initial configuration for a HOOMD simulation and save it to a GSD file.
     
@@ -630,10 +629,14 @@ def create_init_configuration_network(filename, network_file, syslist, aa_param_
 
     ## create array of c.o.m positions for all the molecules
     positions = hu.generate_positions_cubic_lattice(n_chains, box_length)
+    if wall is not None:
+        wall_centers = np.loadtxt(wall)
+        n_walls = len(wall_centers)
     
     ### LOOP ON THE MOLECULES TYPE
     n_prev_mol = 0
     n_prev_res = 0
+    n_prev_wall= 0
     network_distances = []
     foldbond_distances = []
     chain_lengths_list = []
@@ -644,8 +647,12 @@ def create_init_configuration_network(filename, network_file, syslist, aa_param_
     network_pairs = []
     IDRbond_pairs = []
     foldbond_pairs = []
+    restrained_id_list = []
+    wall_bond_names = []
+    wall_bond_id = []
     foldbond_count = 0
     network_count = 0
+    wall_bond_count = 0
     for mol in range(n_mols):
         mol_dict = syslist[mol]
         chain_id, chain_mass, chain_charge, _, _ = hu.aa_stats_sequence(mol_dict['pdb'], aa_param_dict)
@@ -653,9 +660,13 @@ def create_init_configuration_network(filename, network_file, syslist, aa_param_
         chain_lengths_list += [chain_length]
         chain_rel_pos = hu.chain_positions_from_pdb(mol_dict['pdb'], relto='com', chain_mass=chain_mass)   # positions relative to c.o.m. 
         n_mol_chains = int(mol_dict['N'])
-            
-        mol_pos = np.concatenate([list(chain_rel_pos+positions[n_prev_mol+i_chain]) for i_chain in range(n_mol_chains)])
 
+        if mol_dict['wall_radius']!=0 and wall is not None:
+            mol_pos = np.concatenate([list(chain_rel_pos+wall_centers[n_prev_wall+i_chain]) for i_chain in range(n_mol_chains)])
+            n_prev_wall += n_mol_chains
+        else:
+            mol_pos = np.concatenate([list(chain_rel_pos+positions[n_prev_mol+i_chain]) for i_chain in range(n_mol_chains)])
+            
         # elastic network
         tmp_network_id = []
         tmp_network_pairs = []
@@ -698,7 +709,16 @@ def create_init_configuration_network(filename, network_file, syslist, aa_param_
         else:
             for i_chain in range(n_mol_chains):
                 tmp_IDRbond_pairs += [[n_prev_res + i+i_chain*chain_length, n_prev_res + i+1+i_chain*chain_length] for i in range(chain_length-1)]
-
+                
+        # wall bonds to dummy particle:
+        tmp_restrained_id_list = []
+        tmp_wall_bond_id = []
+        if mol_dict['wall_radius']!=0 and wall is not None:
+            wall_bond_count += 1
+            wall_bond_names.append(f'WCA_bond{wall_bond_count}')
+            tmp_restrained_id_list += [[n_prev_res + i+i_chain*chain_length for i in range(chain_length)] for i_chain in range(n_mol_chains)]
+            tmp_wall_bond_id += [wall_bond_count]*chain_length*n_mol_chains
+                        
         s.particles.N += n_mol_chains*chain_length
         s.particles.typeid += n_mol_chains*chain_id
         s.particles.mass += n_mol_chains*chain_mass
@@ -717,7 +737,9 @@ def create_init_configuration_network(filename, network_file, syslist, aa_param_
         foldbond_id.extend(tmp_foldbond_id)
         network_id.extend(tmp_network_id)
         
-                
+        restrained_id_list.extend(tmp_restrained_id_list)
+        wall_bond_id.extend(tmp_wall_bond_id)
+        
     bond_pairs = []
     bond_pairs.extend(IDRbond_pairs)
     bond_pairs.extend(foldbond_pairs)
@@ -727,12 +749,36 @@ def create_init_configuration_network(filename, network_file, syslist, aa_param_
     bond_id.extend(foldbond_id)
     network_id = list( np.array(network_id)+len(foldbond_names) )
     bond_id.extend(network_id)
-
+    
     s.bonds.N += len(bond_pairs)
     s.bonds.types += foldbond_names+network_names
     s.bonds.typeid += bond_id
     s.bonds.group += bond_pairs
     print(len(bond_id))
+    
+    if wall is not None:
+        if n_walls!=len(restrained_id_list):
+            raise IndexError(f"Error: walls centers in wall_file and chains with defined wall_radius different from 0  must be of the same length. n_walls={n_walls}, n_confined_chains={len(restrained_id_list)} instead!")
+            
+        wall_bond_id = list( np.array(wall_bond_id)+len(s.bonds.types)-1 )
+        
+        walls_id = [s.particles.N+i for i in range(n_walls)]
+        bond_wall_pairs = [[ww, restrained_id] for ww, restrained_chain in zip(walls_id, restrained_id_list) for restrained_id in restrained_chain]
+
+        s.particles.N += n_walls
+        s.particles.types += ['wal'] 
+        s.particles.typeid += [len(s.particles.types)-1]*n_walls
+        s.particles.mass += [0]*n_walls
+        s.particles.charge += [0]*n_walls
+        s.particles.position += list(wall_centers)
+        s.particles.moment_inertia += [[0,0,0]]*n_walls
+        s.particles.orientation += [(1, 0, 0, 0)]*n_walls
+        
+        s.bonds.N += len(bond_wall_pairs)
+        s.bonds.types += wall_bond_names
+        s.bonds.typeid += wall_bond_id
+        s.bonds.group += bond_wall_pairs
+        print(len(s.bonds.typeid))
 
     with gsd.hoomd.open(name=filename, mode='wb') as fout:
         fout.append(s)
@@ -745,12 +791,12 @@ def create_init_configuration_network(filename, network_file, syslist, aa_param_
             for name, distance in zip(foldbond_names, foldbond_distances):
                 file.write(f"{name}  {distance}\n")
     else:
-        raise IndexError("Error: newtork bond names and network bond distances must be of the same length.")
+        raise IndexError("Error: network bond names and network bond distances must be of the same length.")
 
 
 ### --------------------------------- SIMULATION MODE ------------------------------------------------
 
-def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0, cationpi=False, mode='relax', resize=None, network=None, logenergy=False):
+def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0, cationpi=False, mode='relax', resize=None, network=None, logenergy=False, wall=None):
     # UNITS: distance -> nm   (!!!positions and sigma in files are in agstrom!!!)
     #        mass -> amu
     #        energy -> kJ/mol
@@ -808,12 +854,15 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
     # molecules chain lengths
     n_mols = len(syslist)
     chain_lengths_l = []
+    wall_radii_l = []
     for mol in range(n_mols):
         mol_dict = syslist[mol]
         chain_id = hu.chain_id_from_pdb(mol_dict['pdb'], aa_param_dict)
         chain_lengths_l += [len(chain_id)]
+        if mol_dict['wall_radius']!=0:
+            wall_radii_l.append(float(mol_dict['wall_radius']))
+    logging.debug(f"INPUT : wall radii: {wall_radii_l}")
     logging.debug(f"INPUT : chain lengths: {chain_lengths_l}")
-
 
     ### HOOMD3 routine
     ## INITIALIZATION
@@ -845,13 +894,16 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
     # rigid bodies 
     if network==None:
         rigid, rigid_masses_l, n_rigids_l, R_type_list = hu.rigidbodies_from_syslist(syslist, chain_lengths_l, aa_param_dict, rescale)
-        logging.debug(f"RIGID : rigid names: {R_type_list}")
         logging.debug(f"RIGID : n_rigids_l: {n_rigids_l}")
     else:
-        R_type_list = []
+        if wall is not None:
+            R_type_list = ['wal']
+        else:
+            R_type_list = []
         n_rigids_l = [0]*n_mols
         rigid_masses_l = []
-    
+    logging.debug(f"RIGID : rigid names: {R_type_list}")
+
     # phosphosite
     if network==None:
         ser_serials = phospho.phosphosites_from_syslist(syslist, type_id, chain_lengths_l, n_rigids_l)
@@ -869,6 +921,8 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
     # groups
     all_group = hoomd.filter.All()
     moving_group = hoomd.filter.Rigid(("center", "free"))
+    if wall is not None:
+        moving_group = hoomd.filter.Intersection( moving_group, hoomd.filter.Type( list(snap.particles.types).remove('wal') ) )
     
     ## PAIR INTERACTIONS
     # neighbor list
@@ -880,7 +934,8 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
         harmonic.params['AA_bond'] = dict(k=8033, r0=0.381)
     else:
         harmonic.params['AA_bond'] = dict(k=8360, r0=0.381)
-
+        
+    # elastic network
     if network is not None:
         foldbond_names = []
         foldbond_distances = []
@@ -902,6 +957,18 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
         for net_name, net_distance in zip(network_names, network_distances):
             harmonic.params[net_name] = dict(k=700, r0=net_distance)
         
+    # wall bonds
+    if wall is not None:
+        wca = hoomd.md.bond.FENEWCA()
+        for i_r, radius in enumerate(wall_radii_l):
+            wca.params[f'WCA_bond{i_r+1}'] = dict(k=0.0, r0=0.0, epsilon=0.8368, sigma=0.5, delta=radius)
+            harmonic.params[f'WCA_bond{i_r+1}'] = dict(k=0, r0=0)
+        wca.params['AA_bond'] = dict(k=0, r0=0, epsilon=0, sigma=0, delta=0)
+        for net_name in foldbond_names:
+            wca.params[net_name] = dict(k=0, r0=0, epsilon=0, sigma=0, delta=0)
+        for net_name in network_names:
+            wca.params[net_name] = dict(k=0, r0=0, epsilon=0, sigma=0, delta=0)
+    
     # electrostatics forces
     yukawa = yukawa_pair_potential(cell, aa_type, R_type_list, aa_charge, model, production_T, ionic, rescale)
     
@@ -937,6 +1004,8 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
     
     # forces 
     integrator.forces.append(harmonic)
+    if wall is not None:
+        integrator.forces.append(wca)
     integrator.forces.append(yukawa)
     # integrator.forces.append(ashbaugh_table)
     integrator.forces.append(ashbaugh)
