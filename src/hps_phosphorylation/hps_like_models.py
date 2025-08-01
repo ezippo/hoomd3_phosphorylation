@@ -922,7 +922,10 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
     all_group = hoomd.filter.All()
     moving_group = hoomd.filter.Rigid(("center", "free"))
     if wall is not None:
-        moving_group = hoomd.filter.Intersection( moving_group, hoomd.filter.Type( list(snap.particles.types).remove('wal') ) )
+        moving_types = snap.particles.types.copy()
+        moving_types.remove('wal')
+        logging.debug(f"FILTER : moving types: {moving_types}")
+        moving_group = hoomd.filter.Intersection( moving_group, hoomd.filter.Type( moving_types ) )
     
     ## PAIR INTERACTIONS
     # neighbor list
