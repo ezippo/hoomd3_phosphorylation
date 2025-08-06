@@ -52,7 +52,7 @@ The main installation steps are:
   - **cd hoomd-blue**
   - **mkdir build**
   - **cd build**
-  - when using a virtual environment, set the cmake prefix path before running cmake: **export CMAKE_PREFIX_PATH=<path-to-environment>**
+  - when using a virtual environment, set the cmake prefix path before running cmake: **export CMAKE_PREFIX_PATH=\<path-to-environment\>**
   - **cmake ../ -D<flags-name>=<value>**
   - **make install**
 Mandatory flags for the cmake are: **-DENABLE_GPU=on** to enable GPU computations, **-DSINGLE_PRECISION=on** for faster simulations if not interested in double precision computations, 
