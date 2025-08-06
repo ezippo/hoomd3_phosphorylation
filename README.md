@@ -55,8 +55,10 @@ The main installation steps are:
   - when using a virtual environment, set the cmake prefix path before running cmake: **export CMAKE_PREFIX_PATH=\<path-to-environment\>**
   - **cmake ../ -D\<flags-name\>=\<value\>**
   - **make install**
+
 Mandatory flags for the cmake are: **-DENABLE_GPU=on** to enable GPU computations, **-DSINGLE_PRECISION=on** for faster simulations if not interested in double precision computations, 
 Optional flags: **-DCMAKE_CXX_FLAGS=-march=native -DCMAKE_C_FLAGS=-march=native** to optimize the build for your processor, **-DPYTHON_EXECUTABLE=/path/to/python3 -DCMAKE_CUDA_COMPILER=/location/of/nvcc/or/hipcc -D\<not-found-package-name\>_ROOT=/path/to/not/found/package** if not automatically detected by cmake, **-DCMAKE_INSTALL_PREFIX=/path/to/install/hoomd** if you want to install hoomd in a specific location.
+
 
 ### Usage
 
