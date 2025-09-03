@@ -146,7 +146,7 @@ The system file is structure in the following way:
   - 'N': number of chains of the same molecule species in the simulation box
   - 'rigid': specify the portion of the molecule to keep fixed as a rigid body.
             Use '0' for no-rigid bodies; specify a range from i-th to j-th residue of the sequence to keep rigid using the format 'i-j';
-            in case of multiple rigid bodies in the molecule, separate the ranges with a comma ',' (e.g. '3-80,102-140' are to rigid bodies, one from residue 3 to 80 and another from 102 to 140).
+            in case of multiple rigid bodies in the molecule, separate the ranges with a comma ',' (e.g. '3-80,102-140' are two rigid bodies, one from residue 3 to 80 and another from 102 to 140).
   - 'active_sites': specify the residues to be considered active site when computing the distances in the phosphorylation step.
             Use '0' for no active sites; specify active site residues as a list of serial numbers separated by comma (e.g. '149,150,151' means that the active site residues are residue 149,150 and 151).
   - 'phospho_sites': specify the phosphosites (residues that can be phosphorylated) for the phosphorylation step.

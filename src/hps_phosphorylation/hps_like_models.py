@@ -836,6 +836,9 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
         sim.create_state_from_gsd(filename=file_start)
         snap = sim.state.get_snapshot()
     init_step = sim.initial_timestep
+    # check if box dimensions are correct
+    if list(snap.configuration.box[:3])!=box_size:
+        raise ValueError(f"Error: box dimensions in input file ({box_size}) don't match the initial snapshot ({list(snap.configuration.box[:3])}).")
 
     # indexing and types
     type_id = snap.particles.typeid
