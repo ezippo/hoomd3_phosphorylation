@@ -2,7 +2,7 @@
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.15207491.svg)](https://doi.org/10.5281/zenodo.15207491)
 
 Repository with code used in Zippo, E., Dormann, D., Speck, T. & Stelzl, L.L. Molecular simulations of enzymatic phosphorylation of
-disordered proteins and their condensates, *bioRxiv* (2024), doi: https://doi.org/10.1101/2024.08.15.607948 .
+disordered proteins and their condensates, *Nat.Commun.* (2025), doi: https://doi.org/10.1038/s41467-025-59676-4 .
 
 Supporting data can be found on the Zenodo platform (Zippo, E. (2024). Supporting Data: Molecular simulations of enzymatic phosphorylation of disordered proteins and their condensates. Zenodo. https://doi.org/10.5281/zenodo.13833526).
 
@@ -37,7 +37,28 @@ The code is also available in PyPI-test and it can be installed by using the fol
   pip install -i https://test.pypi.org/simple/ hps-phosphorylation
 
 Copy the python script *main.py* to run the code.
-The installation time should be just few seconds.
+The installation should take only few seconds.
+
+**HOOMD installation tips**
+
+In order to be able to install the custom *ashbaugh_plugin*, necessary to run the code, it is suggested to build HOOMD-blue from source.
+Information can be found here at *https://hoomd-blue.readthedocs.io/en/v3.8.1/building.html* . It is sugegsted to build it in a virtual environment with all the prerequisites.
+It is common to run into trouble with the recognition of packages paths and with packages compatibilities. 
+If this is the case, most problems can be solved by providing the path to cmake through a cmake flag or by defining the appropriate global environment variable.
+The main installation steps are:
+  - create virtual environment and activate it
+  - install prerequisites
+  - **git clone --branch v3.8.1 --recursive https://github.com/glotzerlab/hoomd-blue**
+  - **cd hoomd-blue**
+  - **mkdir build**
+  - **cd build**
+  - when using a virtual environment, set the cmake prefix path before running cmake: **export CMAKE_PREFIX_PATH=\<path-to-environment\>**
+  - **cmake ../ -D\<flags-name\>=\<value\>**
+  - **make install**
+
+Mandatory flags for the cmake are: **-DENABLE_GPU=on** to enable GPU computations, **-DSINGLE_PRECISION=on** for faster simulations if not interested in double precision computations, 
+Optional flags: **-DCMAKE_CXX_FLAGS=-march=native -DCMAKE_C_FLAGS=-march=native** to optimize the build for your processor, **-DPYTHON_EXECUTABLE=/path/to/python3 -DCMAKE_CUDA_COMPILER=/location/of/nvcc/or/hipcc -D\<not-found-package-name\>_ROOT=/path/to/not/found/package** if not automatically detected by cmake, **-DCMAKE_INSTALL_PREFIX=/path/to/install/hoomd** if you want to install hoomd in a specific location.
+
 
 ### Usage
 
@@ -125,7 +146,7 @@ The system file is structure in the following way:
   - 'N': number of chains of the same molecule species in the simulation box
   - 'rigid': specify the portion of the molecule to keep fixed as a rigid body.
             Use '0' for no-rigid bodies; specify a range from i-th to j-th residue of the sequence to keep rigid using the format 'i-j';
-            in case of multiple rigid bodies in the molecule, separate the ranges with a comma ',' (e.g. '3-80,102-140' are to rigid bodies, one from residue 3 to 80 and another from 102 to 140).
+            in case of multiple rigid bodies in the molecule, separate the ranges with a comma ',' (e.g. '3-80,102-140' are two rigid bodies, one from residue 3 to 80 and another from 102 to 140).
   - 'active_sites': specify the residues to be considered active site when computing the distances in the phosphorylation step.
             Use '0' for no active sites; specify active site residues as a list of serial numbers separated by comma (e.g. '149,150,151' means that the active site residues are residue 149,150 and 151).
   - 'phospho_sites': specify the phosphosites (residues that can be phosphorylated) for the phosphorylation step.
@@ -135,7 +156,7 @@ The system file is structure in the following way:
 
 
 <small>1) Zippo, E., Dormann, D., Speck, T. & Stelzl, L.L. Molecular simulations of enzymatic phosphorylation of
-disordered proteins and their condensates, *bioRxiv* (2024), doi: https://doi.org/10.1101/2024.08.15.607948 </small>
+disordered proteins and their condensates, *Nat.Commun.* (2025), doi: https://doi.org/10.1038/s41467-025-59676-4 </small>
 
 <small>2) Dignon, G. L., Zheng, W., Kim, Y. C., Best, R. B. & Mittal, J. Sequence determinants of
 protein phase behavior from a coarse-grained model, *PLoS Comput. Biol.* 14, e1005941 (2018) </small>
