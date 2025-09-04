@@ -694,7 +694,7 @@ def create_init_configuration_network(filename, network_file, syslist, aa_param_
                         tmp_network_pairs.append([n_prev_res+rigid_ind[i], n_prev_res+rigid_ind[j]])
             tmp_network_id *= n_mol_chains
             tmp_network_pairs = [ list( np.array(pair)+i_chain*chain_length ) for i_chain in range(n_mol_chains) for pair in tmp_network_pairs ]
-            print(tmp_network_pairs)
+        
         else:
             for i_chain in range(n_mol_chains):
                 tmp_IDRbond_pairs += [[n_prev_res + i+i_chain*chain_length, n_prev_res + i+1+i_chain*chain_length] for i in range(chain_length-1)]
