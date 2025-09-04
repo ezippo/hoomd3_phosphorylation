@@ -21,6 +21,8 @@ It contains the framework to easily run coarse-grained Molecular Dynamics (MD) s
 
 **Prerequisites**:
 -  numpy
+-  MDAnalysis
+-  scikit-learn
 -  HOOMD-blue: code written for hoomd v3, tested with hoomd v3.8.1
 -  gsd: code written for gsd v2, tested with gsd v2.8.1
 -  ashbaugh_plugin: plugin for hoomd v3 with Ashbaugh-Hatch pair potential, can be found at *https://github.com/ezippo/ashbaugh_plugin*
