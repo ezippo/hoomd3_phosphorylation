@@ -6,7 +6,6 @@ import time
 import logging
 
 import numpy as np
-import MDAnalysis as mda
 import hoomd
 import gsd, gsd.hoomd
 import ashbaugh_plugin as aplugin
@@ -1134,6 +1133,7 @@ if __name__=='__main__':
     yuk = yukawa_pair_potential(cell, aa_type, ['R1','R2'], aa_charge, model='HPS', temp=300, ionic=0.100, rescale=0)
 
     print(yuk.params==yuk1.params)
+
 
 
 
