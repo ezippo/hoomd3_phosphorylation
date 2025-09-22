@@ -112,7 +112,7 @@ def aa_stats_from_file(filename):
     return aa_dict
 
 
-def aa_stats_sequence(filename, aa_dict):
+def _deprecated_aa_stats_sequence(filename, aa_dict):
     '''
     Parameters
     ----------
@@ -152,8 +152,42 @@ def aa_stats_sequence(filename, aa_dict):
                 chain_pos.append( (float(line_list[6]), float(line_list[7]), float(line_list[8])) )
     return chain_id, chain_mass, chain_charge, chain_sigma, chain_pos
 
+def aa_stats_sequence(filename, aa_dict):
+    '''
+    Parameters
+    ----------
+    filename : str
+        Name of the file with the chain sequence.
+    aa_dict : dict
+        dict('amino acid name':[mass, charge, sigma, lambda]).
 
-def chain_id_from_pdb(filename, aa_dict):
+    Returns
+    -------
+    chain_id : list
+        List of a.a. id numbers of the sequence.
+    chain_mass : list
+        List of a.a. masses of the sequence.
+    chain_charge : list
+        List of a.a. charges of the sequence.
+    chain_sigma : list
+        List of a.a. radia of the sequence.
+    chain_pos : list
+        List of a.a. position tuple (x,y,z) of the sequence.
+    '''
+    aa_keys = list(aa_dict.keys()) 
+    u = mda.Universe(filename)
+    chain_resnames = u.atoms.resnames
+
+    chain_id = [ aa_keys.index(aa_name) for aa_name in chain_resnames]
+    chain_mass = [ aa_dict[aa_name][0] for aa_name in chain_resnames ]
+    chain_charge = [ aa_dict[aa_name][1] for aa_name in chain_resnames ]
+    chain_sigma = [ aa_dict[aa_name][2] for aa_name in chain_resnames ]
+    chain_pos = u.atoms.positions
+    
+    return chain_id, chain_mass, chain_charge, chain_sigma, chain_pos
+
+
+def _deprecated_chain_id_from_pdb(filename, aa_dict):
     '''
     Parameters
     ----------
@@ -177,8 +211,28 @@ def chain_id_from_pdb(filename, aa_dict):
                 chain_id.append(aa_keys.index(aa_name))
     return chain_id
 
+def chain_id_from_pdb(filename, aa_dict):
+    '''
+    Parameters
+    ----------
+    filename : str
+        Name of the file with the chain sequence.
+    aa_dict : dict
+        dict('amino acid name':[mass, charge, sigma, lambda]).
 
-def chain_positions_from_pdb(filename, relto=None, chain_mass=None, unit='nm'):
+    Returns
+    -------
+    chain_id : list
+        List of a.a. id numbers of the sequence.
+    '''
+    aa_keys = list(aa_dict.keys()) 
+    u = mda.Universe(filename)
+    chain_resnames = u.atoms.resnames
+    chain_id = [ aa_keys.index(aa_name) for aa_name in chain_resnames]
+    
+    return chain_id
+
+def _deprecated_chain_positions_from_pdb(filename, relto=None, chain_mass=None, unit='nm'):
     '''
     Parameters
     ----------
@@ -215,6 +269,45 @@ def chain_positions_from_pdb(filename, relto=None, chain_mass=None, unit='nm'):
     elif relto=='cog':
         return chain_pos - np.mean(chain_pos, axis=0)
     elif relto=='com':
+        reshaped_mass = np.reshape( chain_mass, (len(chain_mass),1) )
+        chain_com_pos = np.sum(chain_pos * reshaped_mass, axis=0) / np.sum(chain_mass)
+        return chain_pos - chain_com_pos
+    else:
+        print("ERROR: relto option can only be None, 'cog' or 'com'. The insterted value is not valid! ")
+        exit()
+
+def chain_positions_from_pdb(filename, relto=None, chain_mass=None, unit='nm'):
+    '''
+    Parameters
+    ----------
+    filename : str
+        Name of the file with the chain sequence.
+    relto : str (default None)
+        if None: extracts raw positions from pdb file;
+        if 'com': computes positions relative to the center-of-mass. In this case, it is mandatory to specify the parameter 'chain_mass';
+        if 'cog': computes positions relative to the center-of-geometry.
+    chain_mass : list (default None)
+        if relto='com', you need to specify the list of a.a. masses of the sequence;
+    unit : str (default 'nm')
+        if 'nm': devides the postitions values by 10
+        if 'A': keeps the values in Angstrom
+
+    Returns
+    -------
+    chain_pos : ndarray
+        Numpay array of a.a. positions (x,y,z) of the sequence.
+    '''
+    u = mda.Universe('input_stats/com_UPF1.pdb')
+    if unit=='A':
+        chain_pos = u.atoms.positions
+    elif unit=='nm':
+        chain_pos = u.atoms.positions/10.
+
+    if relto==None:
+        return chain_pos
+    elif relto=='cog':
+        return chain_pos - np.mean(chain_pos, axis=0)
+    elif relto=='com' and chain_mass is not None:
         reshaped_mass = np.reshape( chain_mass, (len(chain_mass),1) )
         chain_com_pos = np.sum(chain_pos * reshaped_mass, axis=0) / np.sum(chain_mass)
         return chain_pos - chain_com_pos
