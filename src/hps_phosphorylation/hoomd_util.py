@@ -6,6 +6,7 @@ import math
 import itertools
 
 import numpy as np
+import MDAnalysis as mda
 import hoomd
 
 class PrintTimestep(hoomd.custom.Action):
