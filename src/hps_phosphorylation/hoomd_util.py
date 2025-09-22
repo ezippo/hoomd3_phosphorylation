@@ -509,13 +509,9 @@ def rigid_dict_from_syslist(syslist):
     for mol in range(n_mols):
         key = mol_keys[mol]
         mol_dict = syslist[mol]
-        chain_length = 0
 
-        # Calculate the length of the chain by counting lines starting with 'A' in the PDB file
-        with open(mol_dict['pdb'], 'r') as fid:
-            for line in fid:
-                if line[0]=='A':
-                    chain_length += 1
+        u = mda.Universe(mol_dict['pdb'])
+        chain_length = u.atoms.n_atoms
 
         if mol_dict['rigid']=='0':
             # If no rigid bodies, store the information with zero rigid bodies and the entire chain as free
