@@ -298,7 +298,7 @@ def chain_positions_from_pdb(filename, relto=None, chain_mass=None, unit='nm'):
     chain_pos : ndarray
         Numpay array of a.a. positions (x,y,z) of the sequence.
     '''
-    u = mda.Universe('input_stats/com_UPF1.pdb')
+    u = mda.Universe(filename)
     if unit=='A':
         chain_pos = u.atoms.positions
     elif unit=='nm':
