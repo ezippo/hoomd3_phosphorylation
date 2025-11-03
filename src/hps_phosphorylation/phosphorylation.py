@@ -101,16 +101,16 @@ class ChangeSerine(hoomd.custom.Action):
                     # Apply the Metropolis criterion for phosphorylation
                     if metropolis_boltzmann(U_fin-U_in, self._Dmu, self._temp):
                         logging.info(f"Phosphorylation occured: SER id {ser_index}")
-                        self._glb_contacts += [[timestep, ser_index, 1, min_dist, U_fin-U_in, self._enzyme_ind]]
+                        self._glb_contacts += [[timestep, ser_index, 1, min_dist, U_fin-U_in, self._enzyme_ind, active_pos[0,0],active_pos[0,1],active_pos[0,2] ]]
                         if self._glb_changes is not None:
-                            self._glb_changes += [[timestep, ser_index, 1, min_dist, U_fin-U_in, self._enzyme_ind]]
+                            self._glb_changes += [[timestep, ser_index, 1, min_dist, U_fin-U_in, self._enzyme_ind, active_pos[0,0],active_pos[0,1],active_pos[0,2] ]]
 
                     else:
                         # Revert if the Metropolis test fails
                         snap.particles.typeid[ser_index] = self._id_Ser_types[idser]
                         self._state.set_snapshot(snap)
                         logging.info(f'Phosphorylation SER id {ser_index} not accepted')
-                        self._glb_contacts += [[timestep, ser_index, 0, min_dist, U_fin-U_in, self._enzyme_ind]]
+                        self._glb_contacts += [[timestep, ser_index, 0, min_dist, U_fin-U_in, self._enzyme_ind, active_pos[0,0],active_pos[0,1],active_pos[0,2] ]]
                         
                 # if closest residue of ser_serials is a pSer, try de-phosphorylation
                 elif snap.particles.typeid[ser_index]==self._id_pSer_types[idser]:
@@ -121,15 +121,15 @@ class ChangeSerine(hoomd.custom.Action):
                     logging.debug(f"U_fin = {U_fin}, U_in = {U_in}")
                     if metropolis_boltzmann(U_fin-U_in, -self._Dmu, self._temp):
                         logging.info(f"Dephosphorylation occured: SER id {ser_index}")
-                        self._glb_contacts += [[timestep, ser_index, -1, min_dist, U_fin-U_in, self._enzyme_ind]]
+                        self._glb_contacts += [[timestep, ser_index, -1, min_dist, U_fin-U_in, self._enzyme_ind, active_pos[0,0],active_pos[0,1],active_pos[0,2] ]]
                         if self._glb_changes is not None:
-                            self._glb_changes += [[timestep, ser_index, -1, min_dist, U_fin-U_in, self._enzyme_ind]]
+                            self._glb_changes += [[timestep, ser_index, -1, min_dist, U_fin-U_in, self._enzyme_ind, active_pos[0,0],active_pos[0,1],active_pos[0,2] ]]
 
                     else:
                         snap.particles.typeid[ser_index] = self._id_pSer_types[idser]
                         self._state.set_snapshot(snap)
                         logging.info(f'Dephosphorylation SER id {ser_index} not accepted')
-                        self._glb_contacts += [[timestep, ser_index, 2, min_dist, U_fin-U_in, self._enzyme_ind]]
+                        self._glb_contacts += [[timestep, ser_index, 2, min_dist, U_fin-U_in, self._enzyme_ind, active_pos[0,0],active_pos[0,1],active_pos[0,2] ]]
 
                 else:
                     bug_counter += 1
@@ -203,7 +203,7 @@ class ReservoirExchange(hoomd.custom.Action):
                     U_fin = self._forces[0].energy + self._forces[1].energy
                     logging.debug(f"U_fin = {U_fin}, U_in = {U_in}")
                     if metropolis_boltzmann(U_fin-U_in, 0, self._temp):
-                        self._glb_changes += [[timestep, ser_index, 10, min_dist, U_fin-U_in, -1]]
+                        self._glb_changes += [[timestep, ser_index, 10, min_dist, U_fin-U_in, -1, active_pos[0,0],active_pos[0,1],active_pos[0,2] ]]
                         logging.debug(f"Reservoir exchange Ser -> pSer: SER id {ser_index}")
                     else:
                         snap.particles.typeid[ser_index] = self._id_Ser_types[idser]
@@ -218,7 +218,7 @@ class ReservoirExchange(hoomd.custom.Action):
                     U_fin = self._forces[0].energy + self._forces[1].energy
                     logging.debug(f"U_fin = {U_fin}, U_in = {U_in}")
                     if metropolis_boltzmann(U_fin-U_in, 0, self._temp):
-                        self._glb_changes += [[timestep, ser_index, -10, min_dist, U_fin-U_in, -1]]
+                        self._glb_changes += [[timestep, ser_index, -10, min_dist, U_fin-U_in, -1, active_pos[0,0],active_pos[0,1],active_pos[0,2] ]]
                         logging.debug(f"Reservoir exchange pSer -> Ser: SEP id {ser_index}")
                     else:
                         snap.particles.typeid[ser_index] = self._id_pSer_types[idser]
@@ -278,7 +278,7 @@ class ContactDetector(hoomd.custom.Action):
         if min_dist<self._contact_dist:
             ser_index = self._ser_serials[np.argmin(distances)]
             logging.debug(f"ChangeSerine: ser_index {ser_index}")
-            self._glb_contacts += [[timestep, ser_index, -2, min_dist, 0., self._enzyme_ind]]
+            self._glb_contacts += [[timestep, ser_index, -2, min_dist, 0., self._enzyme_ind, active_pos[0,0],active_pos[0,1],active_pos[0,2] ]]
             
 
 class ContactsBackUp(hoomd.custom.Action):
