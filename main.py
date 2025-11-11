@@ -2,6 +2,7 @@
 
 import argparse
 
+import MDAnalysis as mda
 import hps_phosphorylation.hoomd_util as hu
 import hps_phosphorylation.hps_like_models as hps
 
