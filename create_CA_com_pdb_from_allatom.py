@@ -14,7 +14,7 @@ if __name__=='__main__':
     
     parser.add_argument('-o','--outfile', default='out.pdb', type=str, help='Output file name.')
     parser.add_argument('-ic','--initialcut', default=0, type=int, help='Remove the first residues up to "initialcut". ')
-    parser.add_argument('-fc','--finalcut', default=-1, type=int, help='Remove the last residues starting from "finalcut". ')
+    parser.add_argument('-fc','--finalcut', default=None, type=int, help='Remove the last residues starting from "finalcut". ')
 
     args = parser.parse_args()
 
@@ -30,6 +30,9 @@ if __name__=='__main__':
                 ag[res].position = u.residues[res].atoms.center_of_mass()
             print(res)
 
-    ag = ag[args.initialcut:args.finalcut]
+    if args.finalcut is None:
+        ag = ag[args.initialcut:]
+    else:
+        ag = ag[args.initialcut:args.finalcut]
 
     ag.write(args.outfile)
