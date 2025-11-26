@@ -747,7 +747,7 @@ def create_init_configuration_network(filename, network_file, syslist, aa_param_
             sprep_pairs = [p for a,b in combinations(enz_ind,2) for p in product(a,b)]
             
             s.pairs.N = len(sprep_pairs)
-            s.pairs.types = ['coulomb_rep']
+            s.pairs.types = ['lj_rep']
             s.pairs.typeid = [0]*len(sprep_pairs)
             s.pairs.group = sprep_pairs
             print(s.pairs.N)
@@ -932,10 +932,10 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
         
     # special repulsion pairs 
     if specialrepel:
-        special_repel_pair = hoomd.md.special_pair.Coulomb()
-        special_repel_pair.params['coulomb_rep'] = dict(alpha=temp)
-        special_repel_pair.r_cut['coulomb_rep'] = 5.0
-        logging.debug(f"SPECIAL PAIR : coulomb repulsive: alpha={temp}")
+        special_repel_pair = hoomd.md.special_pair.LJ()
+        special_repel_pair.params['lj_rep'] = dict(epsilon=temp/100, sigma=12.0)
+        special_repel_pair.r_cut['lj_rep'] = 2**(1/6)*12.0
+        logging.debug(f"SPECIAL PAIR : LJ repulsive: epsilon={temp/10}, r_cut=2^(1/6)*sigma, sigma=12")
 
     # electrostatics forces
     yukawa = yukawa_pair_potential(cell, aa_type, R_type_list, aa_charge, model, production_T, ionic, rescale)
@@ -972,8 +972,9 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
     
     # forces 
     integrator.forces.append(harmonic)
+    if specialrepel:
+        integrator.forces.append(special_repel_pair)
     integrator.forces.append(yukawa)
-    # integrator.forces.append(ashbaugh_table)
     integrator.forces.append(ashbaugh)
     if cationpi:
         integrator.forces.append(cationpi_lj)
@@ -995,7 +996,6 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
                                   filename=logfile+'_restart2.gsd', filter=all_group,
                                   mode='wb', truncate=True, log=sim_info_log)
     
-    
     # thermodynamical quantities
     therm_quantities = hoomd.md.compute.ThermodynamicQuantities(filter=all_group)
     tq_log = hoomd.logging.Logger()
@@ -1006,6 +1006,8 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
         tq_log.add(ashbaugh, quantities=['energies'])
         if cationpi:
             tq_log.add(cationpi_lj, quantities=['energies'])
+        if specialrepel:
+            tq_log.add(special_repel_pair, quantities=['energies', 'forces'])
         
     tq_gsd = hoomd.write.GSD(trigger=hoomd.trigger.Periodic(dt_log), 
                              filename=logfile+'_log.gsd', filter=hoomd.filter.Null(),
