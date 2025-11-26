@@ -591,7 +591,7 @@ def create_init_configuration(filename, syslist, aa_param_dict, box_length, resc
         fout.close()
 
 
-def create_init_configuration_network(filename, network_file, syslist, aa_param_dict, box_length, rescale=0):
+def create_init_configuration_network(filename, network_file, syslist, aa_param_dict, box_length, rescale=0, specialrepel=False):
     """
     Create an initial configuration for a HOOMD simulation and save it to a GSD file.
     
@@ -632,6 +632,8 @@ def create_init_configuration_network(filename, network_file, syslist, aa_param_
     positions = hu.generate_positions_cubic_lattice(n_chains, box_length)
     
     ### LOOP ON THE MOLECULES TYPE
+    if specialrepel:
+        enz_ind = []
     n_prev_mol = 0
     n_prev_res = 0
     network_distances = []
@@ -655,6 +657,9 @@ def create_init_configuration_network(filename, network_file, syslist, aa_param_
         n_mol_chains = int(mol_dict['N'])
             
         mol_pos = np.concatenate([list(chain_rel_pos+positions[n_prev_mol+i_chain]) for i_chain in range(n_mol_chains)])
+        
+        if specialrepel and mol_dict['active_sites']!='0':
+            enz_ind.extend([[n_prev_res + i+i_chain*chain_length for i in range(0,chain_length,10)] for i_chain in range(n_mol_chains) ])
 
         # elastic network
         tmp_network_id = []
@@ -733,6 +738,25 @@ def create_init_configuration_network(filename, network_file, syslist, aa_param_
     s.bonds.typeid += bond_id
     s.bonds.group += bond_pairs
     print(len(bond_id))
+    
+    # add special pairs in snapshot 
+    if specialrepel:
+        if len(enz_ind)>1:
+            # create cross pairs between enzymes
+            from itertools import combinations, product
+            sprep_pairs = [p for a,b in combinations(enz_ind,2) for p in product(a,b)]
+            
+            s.pairs.N = len(sprep_pairs)
+            s.pairs.types = ['coulomb_rep']
+            s.pairs.typeid = [0]*len(sprep_pairs)
+            s.pairs.group = sprep_pairs
+            print(s.pairs.N)
+            print(s.pairs.types)
+            print(s.pairs.typeid)
+            print(s.pairs.group)
+
+        else:
+            print('Flag --specialrepel was used, but only one enzyme is in the box. No additional special repulsion implemented.')
 
     with gsd.hoomd.open(name=filename, mode='wb') as fout:
         fout.append(s)
@@ -748,9 +772,10 @@ def create_init_configuration_network(filename, network_file, syslist, aa_param_
         raise IndexError("Error: newtork bond names and network bond distances must be of the same length.")
 
 
+
 ### --------------------------------- SIMULATION MODE ------------------------------------------------
 
-def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0, cationpi=False, mode='relax', resize=None, network=None, logenergy=False):
+def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0, cationpi=False, mode='relax', resize=None, network=None, logenergy=False, specialrepel=False):
     # UNITS: distance -> nm   (!!!positions and sigma in files are in agstrom!!!)
     #        mass -> amu
     #        energy -> kJ/mol
@@ -905,6 +930,13 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
         for net_name, net_distance in zip(network_names, network_distances):
             harmonic.params[net_name] = dict(k=700, r0=net_distance)
         
+    # special repulsion pairs 
+    if specialrepel:
+        special_repel_pair = hoomd.md.special_pair.Coulomb()
+        special_repel_pair.params['coulomb_rep'] = dict(alpha=temp)
+        special_repel_pair.r_cut['coulomb_rep'] = 5.0
+        logging.debug(f"SPECIAL PAIR : coulomb repulsive: alpha={temp}")
+
     # electrostatics forces
     yukawa = yukawa_pair_potential(cell, aa_type, R_type_list, aa_charge, model, production_T, ionic, rescale)
     
