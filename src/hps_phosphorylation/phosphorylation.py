@@ -50,7 +50,7 @@ class ChangeSerine(hoomd.custom.Action):
         id_pSer_types (list, optional): List of IDs number associated with pSer in free chain and rigid body. Default [20] (no rigid body).
 
     """
-    def __init__(self, active_serials, ser_serials, forces, glb_contacts, temp, Dmu, box_size, contact_dist, enzyme_ind, glb_changes=None, id_Ser_types=[15], id_pSer_types=[20]):
+    def __init__(self, active_serials, ser_serials, forces, glb_contacts, temp, Dmu, box_size, contact_dist, enzyme_ind, glb_changes=None, id_Ser_types=[15], id_pSer_types=[20], ser_mass=87.08, pser_mass=165.03):
         # Initialize all instance variables
         self._active_serials = active_serials
         self._ser_serials = ser_serials
@@ -64,6 +64,8 @@ class ChangeSerine(hoomd.custom.Action):
         self._glb_changes = glb_changes
         self._id_Ser_types = id_Ser_types
         self._id_pSer_types = id_pSer_types
+        self._ser_mass = ser_mass
+        self._pser_mass = pser_mass
 
     def act(self, timestep):
         """
@@ -75,6 +77,7 @@ class ChangeSerine(hoomd.custom.Action):
         Raises:
             Exception: If the residue is not Ser or pSer (typeid other than 15 or 20).
         """
+        logging.debug(f"ChangeSer: m_ser = {self._ser_mass}, m_pser = {self._pser_mass}")
         snap = self._state.get_snapshot()     # Get the simulation snapshot
         positions = snap.particles.position      # Get the positions of particles
         active_pos = positions[self._active_serials]     # enzyme active site positions
@@ -96,6 +99,7 @@ class ChangeSerine(hoomd.custom.Action):
                 if snap.particles.typeid[ser_index] == self._id_Ser_types[idser]:
                     U_in = sum(_force.energy for _force in self._forces)
                     snap.particles.typeid[ser_index] = self._id_pSer_types[idser]
+                    snap.particles.mass[ser_index] = self._pser_mass
                     self._state.set_snapshot(snap)
                     U_fin = sum(_force.energy for _force in self._forces)
                     logging.debug(f"U_fin = {U_fin}, U_in = {U_in}")
@@ -103,6 +107,8 @@ class ChangeSerine(hoomd.custom.Action):
                     # Apply the Metropolis criterion for phosphorylation
                     if metropolis_boltzmann(U_fin-U_in+D_kinetic, self._Dmu, self._temp):
                         logging.info(f"Phosphorylation occured: SER id {ser_index}")
+                        snap.particles.mass[ser_index] = self._pser_mass
+                        snap.particles.charge[ser_index] = -2
                         self._glb_contacts += [[timestep, ser_index, 1, min_dist, U_fin-U_in, D_kinetic, active_pos[0,0],active_pos[0,1],active_pos[0,2], self._enzyme_ind]]
                         if self._glb_changes is not None:
                             self._glb_changes += [[timestep, ser_index, 1, min_dist, U_fin-U_in, D_kinetic, active_pos[0,0],active_pos[0,1],active_pos[0,2], self._enzyme_ind]]
@@ -123,6 +129,8 @@ class ChangeSerine(hoomd.custom.Action):
                     logging.debug(f"U_fin = {U_fin}, U_in = {U_in}")
                     if metropolis_boltzmann(U_fin-U_in-D_kinetic, -self._Dmu, self._temp):
                         logging.info(f"Dephosphorylation occured: SER id {ser_index}")
+                        snap.particles.mass[ser_index] = self._ser_mass
+                        snap.particles.charge[ser_index] = 0
                         self._glb_contacts += [[timestep, ser_index, -1, min_dist, U_fin-U_in, -D_kinetic, active_pos[0,0],active_pos[0,1],active_pos[0,2], self._enzyme_ind]]
                         if self._glb_changes is not None:
                             self._glb_changes += [[timestep, ser_index, -1, min_dist, U_fin-U_in, -D_kinetic, active_pos[0,0],active_pos[0,1],active_pos[0,2], self._enzyme_ind]]
@@ -161,7 +169,7 @@ class ReservoirExchange(hoomd.custom.Action):
         id_pSer_types (list, optional): List of IDs number associated with pSer in free chain and rigid body. Default [20] (no rigid body).
 
     """
-    def __init__(self, active_serials, ser_serials, forces, glb_changes, temp, Dmu, box_size, bath_dist, id_Ser_types=[15], id_pSer_types=[20]):
+    def __init__(self, active_serials, ser_serials, forces, glb_changes, temp, Dmu, box_size, bath_dist, id_Ser_types=[15], id_pSer_types=[20], ser_mass=87.08, pser_mass=165.03):
         self._active_serials = active_serials
         self._ser_serials = ser_serials
         self._forces = forces
@@ -172,6 +180,8 @@ class ReservoirExchange(hoomd.custom.Action):
         self._bath_dist = bath_dist
         self._id_Ser_types = id_Ser_types
         self._id_pSer_types = id_pSer_types
+        self._ser_mass = ser_mass
+        self._pser_mass = pser_mass
         
     def act(self, timestep):
         """
@@ -183,6 +193,7 @@ class ReservoirExchange(hoomd.custom.Action):
         Raises:
             Exception: If the residue is not Ser or pSer (typeid other than 15 or 20).
         """
+        logging.debug(f"ReservoirExchange: m_ser = {self._ser_mass}, m_pser = {self._pser_mass}")
         snap = self._state.get_snapshot()    # get simulation state
         positions = snap.particles.position    
         active_pos = positions[self._active_serials]     # get active site residues positions
@@ -207,6 +218,8 @@ class ReservoirExchange(hoomd.custom.Action):
                     U_fin = sum(_force.energy for _force in self._forces)
                     logging.debug(f"U_fin = {U_fin}, U_in = {U_in}")
                     if metropolis_boltzmann(U_fin-U_in+D_kinetic, 0, self._temp):
+                        snap.particles.mass[ser_index] = self._pser_mass
+                        snap.particles.charge[ser_index] = -2
                         self._glb_changes += [[timestep, ser_index, 10, min_dist, U_fin-U_in, D_kinetic, active_pos[0,0],active_pos[0,1],active_pos[0,2], -1]]
                         logging.debug(f"Reservoir exchange Ser -> pSer: SER id {ser_index}")
                     else:
@@ -222,6 +235,8 @@ class ReservoirExchange(hoomd.custom.Action):
                     U_fin = sum(_force.energy for _force in self._forces)
                     logging.debug(f"U_fin = {U_fin}, U_in = {U_in}")
                     if metropolis_boltzmann(U_fin-U_in-D_kinetic, 0, self._temp):
+                        snap.particles.mass[ser_index] = self._ser_mass
+                        snap.particles.charge[ser_index] = 0
                         self._glb_changes += [[timestep, ser_index, -10, min_dist, U_fin-U_in, -D_kinetic, active_pos[0,0],active_pos[0,1],active_pos[0,2], -1]]
                         logging.debug(f"Reservoir exchange pSer -> Ser: SEP id {ser_index}")
                     else:
