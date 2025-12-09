@@ -77,7 +77,6 @@ class ChangeSerine(hoomd.custom.Action):
         Raises:
             Exception: If the residue is not Ser or pSer (typeid other than 15 or 20).
         """
-        logging.debug(f"ChangeSer: m_ser = {self._ser_mass}, m_pser = {self._pser_mass}")
         snap = self._state.get_snapshot()     # Get the simulation snapshot
         positions = snap.particles.position      # Get the positions of particles
         active_pos = positions[self._active_serials]     # enzyme active site positions
@@ -109,6 +108,7 @@ class ChangeSerine(hoomd.custom.Action):
                         logging.info(f"Phosphorylation occured: SER id {ser_index}")
                         snap.particles.mass[ser_index] = self._pser_mass
                         snap.particles.charge[ser_index] = -2
+                        logging.debug(f"ChangeSer: new mass = {snap.particles.mass[ser_index]}")
                         self._glb_contacts += [[timestep, ser_index, 1, min_dist, U_fin-U_in, D_kinetic, active_pos[0,0],active_pos[0,1],active_pos[0,2], self._enzyme_ind]]
                         if self._glb_changes is not None:
                             self._glb_changes += [[timestep, ser_index, 1, min_dist, U_fin-U_in, D_kinetic, active_pos[0,0],active_pos[0,1],active_pos[0,2], self._enzyme_ind]]
@@ -131,6 +131,7 @@ class ChangeSerine(hoomd.custom.Action):
                         logging.info(f"Dephosphorylation occured: SER id {ser_index}")
                         snap.particles.mass[ser_index] = self._ser_mass
                         snap.particles.charge[ser_index] = 0
+                        logging.debug(f"ChangeSer: new mass = {snap.particles.mass[ser_index]}")
                         self._glb_contacts += [[timestep, ser_index, -1, min_dist, U_fin-U_in, -D_kinetic, active_pos[0,0],active_pos[0,1],active_pos[0,2], self._enzyme_ind]]
                         if self._glb_changes is not None:
                             self._glb_changes += [[timestep, ser_index, -1, min_dist, U_fin-U_in, -D_kinetic, active_pos[0,0],active_pos[0,1],active_pos[0,2], self._enzyme_ind]]
@@ -193,7 +194,6 @@ class ReservoirExchange(hoomd.custom.Action):
         Raises:
             Exception: If the residue is not Ser or pSer (typeid other than 15 or 20).
         """
-        logging.debug(f"ReservoirExchange: m_ser = {self._ser_mass}, m_pser = {self._pser_mass}")
         snap = self._state.get_snapshot()    # get simulation state
         positions = snap.particles.position    
         active_pos = positions[self._active_serials]     # get active site residues positions
@@ -220,6 +220,7 @@ class ReservoirExchange(hoomd.custom.Action):
                     if metropolis_boltzmann(U_fin-U_in+D_kinetic, 0, self._temp):
                         snap.particles.mass[ser_index] = self._pser_mass
                         snap.particles.charge[ser_index] = -2
+                        logging.debug(f"ReservoirExchange: new mass = {snap.particles.mass[ser_index]}")
                         self._glb_changes += [[timestep, ser_index, 10, min_dist, U_fin-U_in, D_kinetic, active_pos[0,0],active_pos[0,1],active_pos[0,2], -1]]
                         logging.debug(f"Reservoir exchange Ser -> pSer: SER id {ser_index}")
                     else:
@@ -237,6 +238,7 @@ class ReservoirExchange(hoomd.custom.Action):
                     if metropolis_boltzmann(U_fin-U_in-D_kinetic, 0, self._temp):
                         snap.particles.mass[ser_index] = self._ser_mass
                         snap.particles.charge[ser_index] = 0
+                        logging.debug(f"ReservoirExchange: new mass = {snap.particles.mass[ser_index]}")
                         self._glb_changes += [[timestep, ser_index, -10, min_dist, U_fin-U_in, -D_kinetic, active_pos[0,0],active_pos[0,1],active_pos[0,2], -1]]
                         logging.debug(f"Reservoir exchange pSer -> Ser: SEP id {ser_index}")
                     else:
