@@ -98,7 +98,6 @@ class ChangeSerine(hoomd.custom.Action):
                 if snap.particles.typeid[ser_index] == self._id_Ser_types[idser]:
                     U_in = sum(_force.energy for _force in self._forces)
                     snap.particles.typeid[ser_index] = self._id_pSer_types[idser]
-                    snap.particles.mass[ser_index] = self._pser_mass
                     self._state.set_snapshot(snap)
                     U_fin = sum(_force.energy for _force in self._forces)
                     logging.debug(f"U_fin = {U_fin}, U_in = {U_in}")
