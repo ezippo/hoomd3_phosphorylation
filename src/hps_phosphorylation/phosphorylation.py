@@ -105,7 +105,9 @@ class ChangeSerine(hoomd.custom.Action):
                         logging.info(f"Phosphorylation occured: SER id {ser_index}")
                         snap.particles.mass[ser_index] = self._pser_mass
                         snap.particles.charge[ser_index] = -2
+                        snap.particles.velocity[ser_index] = np.random.normal(0, np.sqrt(self._temp/self._pser_mass), 3)
                         logging.debug(f"ChangeSer: new mass = {snap.particles.mass[ser_index]}")
+                        logging.debug(f"ChangeSer: new velocity = {snap.particles.velocity[ser_index]}")
                         self._glb_contacts += [[timestep, ser_index, 1, min_dist, U_fin-U_in, self._enzyme_ind, active_pos[0,0],active_pos[0,1],active_pos[0,2] ]]
                         if self._glb_changes is not None:
                             self._glb_changes += [[timestep, ser_index, 1, min_dist, U_fin-U_in, self._enzyme_ind, active_pos[0,0],active_pos[0,1],active_pos[0,2] ]]
@@ -128,7 +130,9 @@ class ChangeSerine(hoomd.custom.Action):
                         logging.info(f"Dephosphorylation occured: SER id {ser_index}")
                         snap.particles.mass[ser_index] = self._ser_mass
                         snap.particles.charge[ser_index] = 0
+                        snap.particles.velocity[ser_index] = np.random.normal(0, np.sqrt(self._temp/self._ser_mass), 3)
                         logging.debug(f"ChangeSer: new mass = {snap.particles.mass[ser_index]}")
+                        logging.debug(f"ChangeSer: new velocity = {snap.particles.velocity[ser_index]}")
                         self._glb_contacts += [[timestep, ser_index, -1, min_dist, U_fin-U_in, self._enzyme_ind, active_pos[0,0],active_pos[0,1],active_pos[0,2] ]]
                         if self._glb_changes is not None:
                             self._glb_changes += [[timestep, ser_index, -1, min_dist, U_fin-U_in, self._enzyme_ind, active_pos[0,0],active_pos[0,1],active_pos[0,2] ]]
@@ -215,7 +219,9 @@ class ReservoirExchange(hoomd.custom.Action):
                     if metropolis_boltzmann(U_fin-U_in, 0, self._temp):
                         snap.particles.mass[ser_index] = self._pser_mass
                         snap.particles.charge[ser_index] = -2
+                        snap.particles.velocity[ser_index] = np.random.normal(0, np.sqrt(self._temp/self._pser_mass), 3)
                         logging.debug(f"ReservoirExchange: new mass = {snap.particles.mass[ser_index]}")
+                        logging.debug(f"ReservoirExchange: new velocity = {snap.particles.velocity[ser_index]}")
                         self._glb_changes += [[timestep, ser_index, 10, min_dist, U_fin-U_in, -1, active_pos[0,0],active_pos[0,1],active_pos[0,2] ]]
                         logging.debug(f"Reservoir exchange Ser -> pSer: SER id {ser_index}")
                     else:
@@ -233,7 +239,9 @@ class ReservoirExchange(hoomd.custom.Action):
                     if metropolis_boltzmann(U_fin-U_in, 0, self._temp):
                         snap.particles.mass[ser_index] = self._ser_mass
                         snap.particles.charge[ser_index] = 0
+                        snap.particles.velocity[ser_index] = np.random.normal(0, np.sqrt(self._temp/self._ser_mass), 3)
                         logging.debug(f"ReservoirExchange: new mass = {snap.particles.mass[ser_index]}")
+                        logging.debug(f"ReservoirExchange: new velocity = {snap.particles.velocity[ser_index]}")
                         self._glb_changes += [[timestep, ser_index, -10, min_dist, U_fin-U_in, -1, active_pos[0,0],active_pos[0,1],active_pos[0,2] ]]
                         logging.debug(f"Reservoir exchange pSer -> Ser: SEP id {ser_index}")
                     else:
