@@ -48,6 +48,8 @@ class ChangeSerine(hoomd.custom.Action):
         glb_changes (list, optional): Global list to record type change events (Ser to pSer or opposite), necessary only in simulation mode 'ness'. Default None.
         id_Ser_types (list, optional): List of IDs number associated with Ser in free chain and rigid body. Default [15] (no rigid body).
         id_pSer_types (list, optional): List of IDs number associated with pSer in free chain and rigid body. Default [20] (no rigid body).
+        ser_mass (float, optional): Mass of residue type SER. Default 87.08. 
+        pser_mass (float, optional): Mass of residue type SEP. Default 165.03.
 
     """
     def __init__(self, active_serials, ser_serials, forces, glb_contacts, temp, Dmu, box_size, contact_dist, enzyme_ind, glb_changes=None, id_Ser_types=[15], id_pSer_types=[20], ser_mass=87.08, pser_mass=165.03):
@@ -171,7 +173,8 @@ class ReservoirExchange(hoomd.custom.Action):
         bath_dist (float): Minimum distance threshold for reservoir exchange.
         id_Ser_types (list, optional): List of IDs number associated with Ser in free chain and rigid body. Default [15] (no rigid body).
         id_pSer_types (list, optional): List of IDs number associated with pSer in free chain and rigid body. Default [20] (no rigid body).
-
+        ser_mass (float, optional): Mass of residue type SER. Default 87.08. 
+        pser_mass (float, optional): Mass of residue type SEP. Default 165.03.
     """
     def __init__(self, active_serials, ser_serials, forces, glb_changes, temp, Dmu, box_size, bath_dist, id_Ser_types=[15], id_pSer_types=[20], ser_mass=87.08, pser_mass=165.03):
         self._active_serials = active_serials
