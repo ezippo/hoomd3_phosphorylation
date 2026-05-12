@@ -924,14 +924,14 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
     # method : Langevin thermostat
     langevin = hoomd.md.methods.Langevin(filter=moving_group, kT=temp)
     for i,name in enumerate(aa_type):
-        langevin.gamma[name] = aa_mass[i]/1000.0
+        langevin.gamma[name] = aa_mass[i]/100.0
         langevin.gamma_r[name] = (0.0, 0.0, 0.0)
     if rescale!=0:
         for i,name in enumerate(aa_type_r):
-            langevin.gamma[name] = aa_mass[i]/1000.0
+            langevin.gamma[name] = aa_mass[i]/100.0
             langevin.gamma_r[name] = (0.0, 0.0, 0.0)
     for i in range( len(rigid_masses_l) ):
-        langevin.gamma['R'+str(i+1)] = rigid_masses_l[i]/1000.0
+        langevin.gamma['R'+str(i+1)] = rigid_masses_l[i]/100.0
         langevin.gamma_r['R'+str(i+1)] = (4.0, 4.0, 4.0)
         
     # constraints : rigid body
