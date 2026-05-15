@@ -3,6 +3,7 @@ import logging
 
 import hps_phosphorylation.hoomd_util as hu
 import hoomd
+import freud
 
 def metropolis_boltzmann(dU, dmu, kT=2.494338):
     """

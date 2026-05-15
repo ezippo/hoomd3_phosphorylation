@@ -20,6 +20,7 @@ if __name__=='__main__':
     parser.add_argument('--mode', default='relax', type=str, choices=['relax', 'ness', 'nophospho'], help='Default phosphorylation is active without exchange SER/SEP with the chemical bath. If ness also exchange step is added. If nophospho phosphorylation and exchange are deactivated.' )
     parser.add_argument('--logenergy', action='store_true', help='If specified, the log file will store also the potential energy acting on each particle for each pair potential.')
     parser.add_argument('--dump2', type=str, default=None, help='Time interval for the dumping of a second additional dump file, containing only the chains of the second species specified in the system file. If None, no second dump file is created. ')
+    parser.add_argument('--inter-detect', type=str, default=None, help='Name of the molecule (as give in system file) to use as probe for the detection of the interactions with the other molecules. The cutoff radius for the interactions is "contact_dist" in input file. If inter-detect is not specified, no interactions are computed. ')
 
     args = parser.parse_args()
 
@@ -43,5 +44,5 @@ if __name__=='__main__':
     # simulation mode
     else:
         hps.simulate_hps_like(macro_dict=macro_dict, aa_param_dict=aa_param_dict, syslist=syslist, model=args.model, rescale=args.rescale, 
-                            cationpi=args.cationpi, mode=args.mode, resize=args.boxresize, network=args.network, logenergy=args.logenergy, dump2=args.dump2)
+                            cationpi=args.cationpi, mode=args.mode, resize=args.boxresize, network=args.network, logenergy=args.logenergy, dump2=args.dump2, inter-detect=args.inter-detect)
         

@@ -750,7 +750,7 @@ def create_init_configuration_network(filename, network_file, syslist, aa_param_
 
 ### --------------------------------- SIMULATION MODE ------------------------------------------------
 
-def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0, cationpi=False, mode='relax', resize=None, network=None, logenergy=False, dump2=None):
+def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='CALVADOS', rescale=0, cationpi=False, mode='relax', resize=None, network=None, logenergy=False, dump2=None, inter-detect=None):
     # UNITS: distance -> nm   (!!!positions and sigma in files are in agstrom!!!)
     #        mass -> amu
     #        energy -> kJ/mol
@@ -995,6 +995,18 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
     time_action = hu.PrintTimestep(time_start, production_steps)
     time_writer = hoomd.write.CustomWriter(action=time_action, trigger=hoomd.trigger.Periodic(dt_time))
     
+    # ### Interaction detector
+    if inter-detect is not None:
+        which_mol = np.array([syslist[mm]['mol'] for mm in range(nmols)]).index(inter-detect)
+        prev_ids = 0
+        for mm in range(which_mol):
+            prev_ids += syslist[mm]['N']*chain_lengths_l[mm]
+        probe_serials = np.arange(prev_ids, prev_ids+syslist[which_mol]['N']*chain_lengths_l[which_mol])
+        bulk_serials = np.arange(len(typeid))
+        bulk_serials = bulk_serials[np.where(bulk_serials != probe_serials)]
+        inter_detect_action = phospho.InteractionsDetector(probe_serials, bulk_serials, interaction_file=logfile+'_interactions.txt', interaction_dist=contact_dist)
+        inter_detect_updater = hoomd.update.CustomUpdater(action=inter_detect_action, trigger=hoomd.trigger.Periodic(dt_dump)) 
+    
     # ### if there are no active sites, we don't need to check distances or have phosphorylations
     if len(active_serials_l)!=0:
         if start==1 and not os.path.exists(logfile+'_contacts.txt'):
@@ -1079,6 +1091,8 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
     sim.operations.writers.append(backup2_gsd)
     sim.operations.writers.append(tq_gsd)
     sim.operations += time_writer
+    if inter-detect is not None:
+        sim.operations += inter_detect_updater
     if len(active_serials_l)!=0:
         if mode == 'nophospho':
             for i in range(len(active_serials_l)):
