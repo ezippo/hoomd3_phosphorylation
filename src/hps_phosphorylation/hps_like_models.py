@@ -750,7 +750,7 @@ def create_init_configuration_network(filename, network_file, syslist, aa_param_
 
 ### --------------------------------- SIMULATION MODE ------------------------------------------------
 
-def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0, cationpi=False, mode='relax', resize=None, network=None, logenergy=False):
+def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0, cationpi=False, mode='relax', resize=None, network=None, logenergy=False, dump2=None):
     # UNITS: distance -> nm   (!!!positions and sigma in files are in agstrom!!!)
     #        mass -> amu
     #        energy -> kJ/mol
@@ -872,6 +872,12 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
     # groups
     all_group = hoomd.filter.All()
     moving_group = hoomd.filter.Rigid(("center", "free"))
+    if dump2 is not None:
+        name2 = syslist[1]['mol']
+        skip_beads1 = chain_lengths_l[0]*syslist[0]['N']
+        n_beads2 = chain_lengths_l[1]*syslist[1]['N']
+        tags2 = [i for in range(skip_beads1, skip_beads1+n_beads2)]    
+        prot2_group = hoomd.filter.Tags(tags2)
     
     ## PAIR INTERACTIONS
     # neighbor list
@@ -951,6 +957,10 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
     # dump files
     dump_gsd = hoomd.write.GSD(trigger=hoomd.trigger.Periodic(dt_dump), 
                                filename=logfile+'_dump.gsd', filter=all_group,
+                               dynamic=['property', 'momentum', 'attribute', 'topology'])                  # you can add [attributes(particles/typeid)] to trace phosphorylation
+    if dump2 is not None:
+        dump2_gsd = hoomd.write.GSD(trigger=hoomd.trigger.Periodic(dump2), 
+                               filename=logfile+f'_dump_{name2}.gsd', filter=prot2_group,
                                dynamic=['property', 'momentum', 'attribute', 'topology'])                  # you can add [attributes(particles/typeid)] to trace phosphorylation
     
     # back-up files
@@ -1063,6 +1073,8 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
     sim.operations.computes.append(therm_quantities)
 
     sim.operations.writers.append(dump_gsd)
+    if dump2 is not None:
+        sim.operations.writers.append(dump2_gsd)
     sim.operations.writers.append(backup1_gsd)
     sim.operations.writers.append(backup2_gsd)
     sim.operations.writers.append(tq_gsd)
@@ -1110,30 +1122,6 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
 
 
 if __name__=='__main__':
-    import sys
-    sys.path.append('/localscratch/zippoema/lib/ashbaugh_plugin/build/')
-    
-    infile = '/localscratch/zippoema/git/hoomd3_phosphorylation/example/simulation_200tdp43-LCD_2full-ck1d/input_300K.in'
-    macro_dict = hu.macros_from_infile(infile)
-    aa_param_dict = hu.aa_stats_from_file(macro_dict['stat_file'])
-    syslist = hu.system_from_file(macro_dict['sysfile'])
-    reord = hu.reordering_index(syslist)
-
-    aa_type = list(aa_param_dict.keys())
-    aa_charge = []
-    aa_sigma = []
-    aa_lambda =[]
-    for k in aa_type:
-        aa_charge.append(aa_param_dict[k][1])
-        aa_sigma.append(aa_param_dict[k][2])
-        aa_lambda.append(aa_param_dict[k][3])
-    cell = hoomd.md.nlist.Cell(buffer=0.4, exclusions=('bond', 'body'))
-    print(aa_lambda)
-    yuk1 = yukawa_pair_potential_new(cell, aa_type, ['R1','R2'], aa_charge, model='HPS', temp=300, ionic=0.100, rescale=0)
-    yuk = yukawa_pair_potential(cell, aa_type, ['R1','R2'], aa_charge, model='HPS', temp=300, ionic=0.100, rescale=0)
-
-    print(yuk.params==yuk1.params)
-
 
 
 

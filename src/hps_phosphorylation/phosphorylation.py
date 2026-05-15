@@ -279,7 +279,7 @@ class ContactDetector(hoomd.custom.Action):
         enzyme_ind (int): Index of the enzyme.
         displ_as_pos (ndarray, optional): Array with list of displacement vectors for each active site residue. Default None, no displacement.
         reference_vector (ndarray, optional): Array with reference vector to compute the rotation of the rigid body with the active site. Needed in case of displacement (displ_as_pos not None). Default None.
-"""
+    """
     def __init__(self, active_serials, ser_serials, glb_contacts, box_size, contact_dist, enzyme_ind):
         self._active_serials = active_serials
         self._ser_serials = ser_serials
@@ -310,6 +310,71 @@ class ContactDetector(hoomd.custom.Action):
             ser_index = self._ser_serials[np.argmin(distances)]
             logging.debug(f"ChangeSerine: ser_index {ser_index}")
             self._glb_contacts += [[timestep, ser_index, -2, min_dist, 0., self._enzyme_ind, active_pos[0,0],active_pos[0,1],active_pos[0,2] ]]
+            
+
+class InteractionsDetector(hoomd.custom.Action):
+    """
+    Action for detecting contacts between active sites and serine residues in a simulation.
+
+    This class detects when any active site comes within a specified distance of serine residues.
+    It records these contact events along with relevant details.
+
+    Args:
+        active_serials (list of int): Indices of the active sites.
+        ser_serials (list of int): Indices of the serine residues.
+        glb_contacts (list of list): List to record contact events.
+        box_size (list of float): Size of the simulation box.
+        contact_dist (float): Distance threshold for detecting contacts.
+        enzyme_ind (int): Index of the enzyme.
+        displ_as_pos (ndarray, optional): Array with list of displacement vectors for each active site residue. Default None, no displacement.
+        reference_vector (ndarray, optional): Array with reference vector to compute the rotation of the rigid body with the active site. Needed in case of displacement (displ_as_pos not None). Default None.
+    """
+    def __init__(self, probe_serials, bulk_serials, interaction_file, interaction_dist=1.0):
+        self._probe_serials = probe_serials
+        self._bulk_serials = bulk_serials
+        self._interaction_file = interaction_file
+        self._interaction_dist = interaction_dist
+        
+    def act(self, timestep):
+        """
+        Executes the contact detection action at a given timestep.
+
+        Args:
+            timestep (int): The current timestep of the simulation, standard act definition (see HOOMD-blue v3 docmentation).
+        """
+        snap = self._state.get_snapshot()     # get simulation state
+        # MPI safety
+        if snap.communicator.rank != 0:
+            return
+            
+        bulk_pos = snap.particles.position[self._bulk_serials]  
+        probe_pos = snap.particles.position[self._probe_serials]    # get active site positions
+        box = freud.box.Box.from_box(snap.configuration.box)
+
+        # Neighbor search
+        aq = freud.locality.AABBQuery(box, bulk_pos)
+        result = aq.query(probe_pos,
+            {"r_max": self._interaction_dist,
+             "exclude_ii": True} )
+        nlist = result.toNeighborList()
+        distances = nlist.distances
+        
+        # Convert local -> global ids
+        probe_local = nlist.query_point_indices
+        bulk_local = nlist.point_indices
+        probe_global = self._probe_serials[probe_local]
+        bulk_global = self._bulk_serials[bulk_local]
+
+        # Save results
+        if len(distances) > 0:
+            data = np.column_stack([
+                np.full(len(distances), timestep),
+                probe_global,
+                env_global,
+                distances  ])
+
+        with open(self.outfile, "a") as f:
+            np.savetxt(f, data, fmt=["%d", "%d", "%d", "%.5f"])
             
 
 class ContactsBackUp(hoomd.custom.Action):
