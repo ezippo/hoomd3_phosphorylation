@@ -1002,7 +1002,7 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='CALVADOS', resc
         for mm in range(which_mol):
             prev_ids += int(syslist[mm]['N'])*chain_lengths_l[mm]
         probe_serials = np.arange(prev_ids, prev_ids+int(syslist[which_mol]['N'])*chain_lengths_l[which_mol])
-        bulk_serials = np.arange(len(typeid))
+        bulk_serials = np.arange(len(type_id))
         bulk_serials = bulk_serials[np.where(bulk_serials != probe_serials)]
         inter_detect_action = phospho.InteractionsDetector(probe_serials, bulk_serials, interaction_file=logfile+'_interactions.txt', interaction_dist=contact_dist)
         inter_detect_updater = hoomd.update.CustomUpdater(action=inter_detect_action, trigger=hoomd.trigger.Periodic(dt_dump)) 
