@@ -997,7 +997,7 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='CALVADOS', resc
     
     # ### Interaction detector
     if inter_detect is not None:
-        which_mol = np.array([syslist[mm]['mol'] for mm in range(nmols)]).index(inter_detect)
+        which_mol = np.array([syslist[mm]['mol'] for mm in range(n_mols)]).index(inter_detect)
         prev_ids = 0
         for mm in range(which_mol):
             prev_ids += int(syslist[mm]['N'])*chain_lengths_l[mm]
