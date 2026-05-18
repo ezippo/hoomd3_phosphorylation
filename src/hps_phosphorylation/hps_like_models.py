@@ -750,7 +750,7 @@ def create_init_configuration_network(filename, network_file, syslist, aa_param_
 
 ### --------------------------------- SIMULATION MODE ------------------------------------------------
 
-def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='CALVADOS', rescale=0, cationpi=False, mode='relax', resize=None, network=None, logenergy=False, dump2=None, inter-detect=None):
+def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='CALVADOS', rescale=0, cationpi=False, mode='relax', resize=None, network=None, logenergy=False, dump2=None, inter_detect=None):
     # UNITS: distance -> nm   (!!!positions and sigma in files are in agstrom!!!)
     #        mass -> amu
     #        energy -> kJ/mol
@@ -996,8 +996,8 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='CALVADOS', resc
     time_writer = hoomd.write.CustomWriter(action=time_action, trigger=hoomd.trigger.Periodic(dt_time))
     
     # ### Interaction detector
-    if inter-detect is not None:
-        which_mol = np.array([syslist[mm]['mol'] for mm in range(nmols)]).index(inter-detect)
+    if inter_detect is not None:
+        which_mol = np.array([syslist[mm]['mol'] for mm in range(nmols)]).index(inter_detect)
         prev_ids = 0
         for mm in range(which_mol):
             prev_ids += syslist[mm]['N']*chain_lengths_l[mm]
@@ -1091,7 +1091,7 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='CALVADOS', resc
     sim.operations.writers.append(backup2_gsd)
     sim.operations.writers.append(tq_gsd)
     sim.operations += time_writer
-    if inter-detect is not None:
+    if inter_detect is not None:
         sim.operations += inter_detect_updater
     if len(active_serials_l)!=0:
         if mode == 'nophospho':
