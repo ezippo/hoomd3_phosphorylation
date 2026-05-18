@@ -874,9 +874,9 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='CALVADOS', resc
     moving_group = hoomd.filter.Rigid(("center", "free"))
     if dump2 is not None:
         name2 = syslist[1]['mol']
-        skip_beads1 = chain_lengths_l[0]*syslist[0]['N']
-        n_beads2 = chain_lengths_l[1]*syslist[1]['N']
-        tags2 = [i for in range(skip_beads1, skip_beads1+n_beads2)]    
+        skip_beads1 = chain_lengths_l[0]*int(syslist[0]['N'])
+        n_beads2 = chain_lengths_l[1]*int(syslist[1]['N'])
+        tags2 = [i for i in range(skip_beads1, skip_beads1+n_beads2)]    
         prot2_group = hoomd.filter.Tags(tags2)
     
     ## PAIR INTERACTIONS
@@ -1000,8 +1000,8 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='CALVADOS', resc
         which_mol = np.array([syslist[mm]['mol'] for mm in range(nmols)]).index(inter_detect)
         prev_ids = 0
         for mm in range(which_mol):
-            prev_ids += syslist[mm]['N']*chain_lengths_l[mm]
-        probe_serials = np.arange(prev_ids, prev_ids+syslist[which_mol]['N']*chain_lengths_l[which_mol])
+            prev_ids += int(syslist[mm]['N'])*chain_lengths_l[mm]
+        probe_serials = np.arange(prev_ids, prev_ids+int(syslist[which_mol]['N'])*chain_lengths_l[which_mol])
         bulk_serials = np.arange(len(typeid))
         bulk_serials = bulk_serials[np.where(bulk_serials != probe_serials)]
         inter_detect_action = phospho.InteractionsDetector(probe_serials, bulk_serials, interaction_file=logfile+'_interactions.txt', interaction_dist=contact_dist)
@@ -1135,7 +1135,4 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='CALVADOS', resc
     hoomd.write.GSD.write(state=sim.state, filename=logfile+'_end.gsd')
 
 
-if __name__=='__main__':
-
-
-
+#if __name__=='__main__':
