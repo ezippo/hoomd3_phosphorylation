@@ -348,6 +348,7 @@ class InteractionsDetector(hoomd.custom.Action):
         if snap.communicator.rank != 0:
             return
             
+        pos = snap.particles.position  
         bulk_pos = snap.particles.position[self._bulk_serials]  
         probe_pos = snap.particles.position[self._probe_serials]    # get active site positions
         box = freud.box.Box.from_box(snap.configuration.box)
@@ -359,7 +360,7 @@ class InteractionsDetector(hoomd.custom.Action):
              "exclude_ii": True} )
         nlist = result.toNeighborList()
         distances = nlist.distances
-        
+
         # Convert local -> global ids
         probe_local = nlist.query_point_indices
         bulk_local = nlist.point_indices
@@ -371,7 +372,7 @@ class InteractionsDetector(hoomd.custom.Action):
             data = np.column_stack([
                 np.full(len(distances), timestep),
                 probe_global,
-                env_global,
+                bulk_global,
                 distances  ])
 
             with open(self._interaction_file, "a") as f:
