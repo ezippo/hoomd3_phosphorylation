@@ -374,9 +374,9 @@ class InteractionsDetector(hoomd.custom.Action):
                 env_global,
                 distances  ])
 
-        with open(self._interaction_file, "a") as f:
-            np.savetxt(f, data, fmt=["%d", "%d", "%d", "%.5f"])
-            
+            with open(self._interaction_file, "a") as f:
+                np.savetxt(f, data, fmt=["%d", "%d", "%d", "%.5f"])
+                
 
 class ContactsBackUp(hoomd.custom.Action):
     """
