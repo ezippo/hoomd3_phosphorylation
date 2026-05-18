@@ -997,6 +997,7 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='CALVADOS', resc
     
     # ### Interaction detector
     if inter_detect is not None:
+        contact_dist = float(macro_dict['contact_dist'])
         which_mol = [syslist[mm]['mol'] for mm in range(n_mols)].index(inter_detect)
         prev_ids = 0
         for mm in range(which_mol):
