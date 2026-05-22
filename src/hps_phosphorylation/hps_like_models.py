@@ -1071,7 +1071,7 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='CALVADOS', resc
             #                                enzyme_ind=i, glb_changes=changes, ser_mass=aa_mass[15], pser_mass=aa_mass[20]) ]
             #    changeser_updaters_l += [ hoomd.update.CustomUpdater(action=changeser_actions_l[-1], trigger=hoomd.trigger.Periodic(dt_try_change)) ]
 
-            changeser_action = phospho.ChangeSerine_nlist(active_serials=active_serials_l, ser_serials=ser_serials, forces=forces_list,
+            changeser_action = phospho.ChangeSerine_nlist_multienzyme(active_serials=active_serials_l, ser_serials=ser_serials, forces=forces_list,
                                             glb_contacts=contacts, temp=temp, Dmu=Dmu_array.astype(float), box_size=box_size, contact_dist=contact_dist,
                                             glb_changes=changes, ser_mass=aa_mass[15], pser_mass=aa_mass[20]) 
             changeser_updater = hoomd.update.CustomUpdater(action=changeser_action, trigger=hoomd.trigger.Periodic(dt_try_change))

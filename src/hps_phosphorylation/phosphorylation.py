@@ -351,7 +351,7 @@ class ChangeSerine_nlist_multienzyme(hoomd.custom.Action):
 
                 if self._glb_changes is not None:
                     self._glb_changes.append(event)
-s
+
                     
 class ReservoirExchange(hoomd.custom.Action):
     """
