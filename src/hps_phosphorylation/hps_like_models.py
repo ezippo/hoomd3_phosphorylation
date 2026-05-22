@@ -1063,14 +1063,19 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='CALVADOS', resc
                 changes_action = phospho.ChangesBackUp(glb_changes=changes, logfile=logfile)
                 changes_bckp_writer = hoomd.write.CustomWriter(action=changes_action, trigger=hoomd.trigger.Periodic(int(dt_backup/2)))
             
-            changeser_actions_l = []
-            changeser_updaters_l = []
-            for i,active_serial in enumerate(active_serials_l):
-                changeser_actions_l += [ phospho.ChangeSerine_nlist(active_serials=active_serial, ser_serials=ser_serials, forces=forces_list, 
-                                            glb_contacts=contacts, temp=temp, Dmu=float(Dmu_array[i]), box_size=box_size, contact_dist=contact_dist, 
-                                            enzyme_ind=i, glb_changes=changes, ser_mass=aa_mass[15], pser_mass=aa_mass[20]) ]
-                changeser_updaters_l += [ hoomd.update.CustomUpdater(action=changeser_actions_l[-1], trigger=hoomd.trigger.Periodic(dt_try_change)) ]
+            #changeser_actions_l = []
+            #changeser_updaters_l = []
+            #for i,active_serial in enumerate(active_serials_l):
+            #    changeser_actions_l += [ phospho.ChangeSerine(active_serials=active_serial, ser_serials=ser_serials, forces=forces_list, 
+            #                                glb_contacts=contacts, temp=temp, Dmu=float(Dmu_array[i]), box_size=box_size, contact_dist=contact_dist, 
+            #                                enzyme_ind=i, glb_changes=changes, ser_mass=aa_mass[15], pser_mass=aa_mass[20]) ]
+            #    changeser_updaters_l += [ hoomd.update.CustomUpdater(action=changeser_actions_l[-1], trigger=hoomd.trigger.Periodic(dt_try_change)) ]
 
+            changeser_action = phospho.ChangeSerine_nlist(active_serials=active_serials_l, ser_serials=ser_serials, forces=forces_list,
+                                            glb_contacts=contacts, temp=temp, Dmu=Dmu_array.astype(float), box_size=box_size, contact_dist=contact_dist,
+                                            glb_changes=changes, ser_mass=aa_mass[15], pser_mass=aa_mass[20]) 
+            changeser_updater = hoomd.update.CustomUpdater(action=changeser_action, trigger=hoomd.trigger.Periodic(dt_try_change))
+            
         # backup action    
         contacts_action = phospho.ContactsBackUp(glb_contacts=contacts, logfile=logfile)
         contacts_bckp_writer = hoomd.write.CustomWriter(action=contacts_action, trigger=hoomd.trigger.Periodic(int(dt_backup/2)))
@@ -1103,8 +1108,9 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='CALVADOS', resc
             for i in range(len(active_serials_l)):
                 sim.operations += detector_updaters_l[i]
         else:    
-            for i in range(len(active_serials_l)):
-                sim.operations += changeser_updaters_l[i]
+            #for i in range(len(active_serials_l)):
+            #    sim.operations += changeser_updaters_l[i]
+            sim.operations += changeser_updater
             if mode == 'ness':
                 for i in range(len(active_serials_l)):
                     sim.operations += bath_updaters_l[i]
