@@ -1034,7 +1034,7 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='CALVADOS', resc
         else:
             Dmu_array = macro_dict['Dmu']     # 1 Delta mu per enzyme
             if isinstance(Dmu_array, str):
-                Dmu_array = [Dmu_array]
+                Dmu_array = np.array([Dmu_array])
             if len(Dmu_array) != len(active_serials_l):
                 raise ValueError('ERROR: parameter Dmu in input file must match the number of enzymes in the simulation!')
 
