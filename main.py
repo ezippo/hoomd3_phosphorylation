@@ -21,6 +21,7 @@ if __name__=='__main__':
     parser.add_argument('--logenergy', action='store_true', help='If specified, the log file will store also the potential energy acting on each particle for each pair potential.')
     parser.add_argument('--dump2', type=int, default=None, help='Time interval for the dumping of a second additional dump file, containing only the chains of the second species specified in the system file. If None, no second dump file is created. ')
     parser.add_argument('--inter_detect', type=str, default=None, help='Name of the molecule (as give in system file) to use as probe for the detection of the interactions with the other molecules. The cutoff radius for the interactions is "contact_dist" in input file. If inter-detect is not specified, no interactions are computed. ')
+    parser.add_argument('-sr', '--specialrepel', action='store_true', help='Add a special Coulomb repulsive pair potential between the enzymes.')
 
     args = parser.parse_args()
 
@@ -36,7 +37,7 @@ if __name__=='__main__':
         box_length = float( macro_dict['box'] )
         if args.network is not None:
             hps.create_init_configuration_network(filename=macro_dict['file_start'], network_file=args.network, syslist=syslist, 
-                                        aa_param_dict=aa_param_dict, box_length=box_length, rescale=bool(args.rescale)) 
+                                                  aa_param_dict=aa_param_dict, box_length=box_length, rescale=bool(args.rescale), specialrepel=args.specialrepel) 
         else:
             hps.create_init_configuration(filename=macro_dict['file_start'], syslist=syslist, aa_param_dict=aa_param_dict, 
                                           box_length=box_length, rescale=bool(args.rescale)) 
@@ -44,5 +45,6 @@ if __name__=='__main__':
     # simulation mode
     else:
         hps.simulate_hps_like(macro_dict=macro_dict, aa_param_dict=aa_param_dict, syslist=syslist, model=args.model, rescale=args.rescale, 
-                            cationpi=args.cationpi, mode=args.mode, resize=args.boxresize, network=args.network, logenergy=args.logenergy, dump2=args.dump2, inter_detect=args.inter_detect)
+                              cationpi=args.cationpi, mode=args.mode, resize=args.boxresize, network=args.network, logenergy=args.logenergy, dump2=args.dump2, inter_detect=args.inter_detect, specialrepel=args.sp\
+ecialrepel)
         
