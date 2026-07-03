@@ -591,7 +591,7 @@ def create_init_configuration(filename, syslist, aa_param_dict, box_length, resc
         fout.close()
 
 
-def create_init_configuration_network(filename, network_file, syslist, aa_param_dict, box_length, rescale=0):
+def create_init_configuration_network(filename, network_file, syslist, aa_param_dict, box_length, rescale=0, specialrepel=False):
     """
     Create an initial configuration for a HOOMD simulation and save it to a GSD file.
     
@@ -601,6 +601,7 @@ def create_init_configuration_network(filename, network_file, syslist, aa_param_
     - aa_param_dict: dict, amino acid parameters
     - box_length: float, length of the cubic simulation box
     - rescale: percentage of rescaling to use for folded domain interactions, here necessary to create rescaled amino acid types (default 0, no rescaled types)
+    - specialrepel: bool, default False, create coulomb repulsion between enzymes
     """
     from sklearn.neighbors import radius_neighbors_graph
 
@@ -632,6 +633,8 @@ def create_init_configuration_network(filename, network_file, syslist, aa_param_
     positions = hu.generate_positions_cubic_lattice(n_chains, box_length)
     
     ### LOOP ON THE MOLECULES TYPE
+    if specialrepel:
+        enz_ind = []
     n_prev_mol = 0
     n_prev_res = 0
     network_distances = []
@@ -655,6 +658,9 @@ def create_init_configuration_network(filename, network_file, syslist, aa_param_
         n_mol_chains = int(mol_dict['N'])
             
         mol_pos = np.concatenate([list(chain_rel_pos+positions[n_prev_mol+i_chain]) for i_chain in range(n_mol_chains)])
+
+        if specialrepel and mol_dict['active_sites']!='0':
+            enz_ind.extend([[n_prev_res + i+i_chain*chain_length for i in range(0,chain_length,10)] for i_chain in range(n_mol_chains) ])
 
         # elastic network
         tmp_network_id = []
@@ -734,6 +740,25 @@ def create_init_configuration_network(filename, network_file, syslist, aa_param_
     s.bonds.group += bond_pairs
     print(len(bond_id))
 
+    # add special pairs in snapshot 
+    if specialrepel:
+        if len(enz_ind)>1:
+            # create cross pairs between enzymes
+            from itertools import combinations, product
+            sprep_pairs = [p for a,b in combinations(enz_ind,2) for p in product(a,b)]
+            
+            s.pairs.N = len(sprep_pairs)
+            s.pairs.types = ['lj_rep']
+            s.pairs.typeid = [0]*len(sprep_pairs)
+            s.pairs.group = sprep_pairs
+            print(s.pairs.N)
+            print(s.pairs.types)
+            print(s.pairs.typeid)
+            print(s.pairs.group)
+
+        else:
+            print('Flag --specialrepel was used, but only one enzyme is in the box. No additional special repulsion implemented.')
+
     with gsd.hoomd.open(name=filename, mode='wb') as fout:
         fout.append(s)
         fout.close()
@@ -750,7 +775,7 @@ def create_init_configuration_network(filename, network_file, syslist, aa_param_
 
 ### --------------------------------- SIMULATION MODE ------------------------------------------------
 
-def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='CALVADOS', rescale=0, cationpi=False, mode='relax', resize=None, network=None, logenergy=False, dump2=None, inter_detect=None):
+def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='CALVADOS', rescale=0, cationpi=False, mode='relax', resize=None, network=None, logenergy=False, dump2=None, inter_detect=None, specialrepel=False):
     # UNITS: distance -> nm   (!!!positions and sigma in files are in agstrom!!!)
     #        mass -> amu
     #        energy -> kJ/mol
@@ -910,7 +935,14 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='CALVADOS', resc
             harmonic.params[net_name] = dict(k=8033, r0=net_distance)
         for net_name, net_distance in zip(network_names, network_distances):
             harmonic.params[net_name] = dict(k=700, r0=net_distance)
-        
+
+    # special repulsion pairs 
+    if specialrepel:
+        special_repel_pair = hoomd.md.special_pair.LJ()
+        special_repel_pair.params['lj_rep'] = dict(epsilon=temp/100, sigma=12.0)
+        special_repel_pair.r_cut['lj_rep'] = 2**(1/6)*12.0
+        logging.debug(f"SPECIAL PAIR : LJ repulsive: epsilon={temp/10}, r_cut=2^(1/6)*sigma, sigma=12")
+
     # electrostatics forces
     yukawa = yukawa_pair_potential(cell, aa_type, R_type_list, aa_charge, model, production_T, ionic, rescale)
     
@@ -946,6 +978,8 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='CALVADOS', resc
     
     # forces 
     integrator.forces.append(harmonic)
+    if specialrepel:
+        integrator.forces.append(special_repel_pair)
     integrator.forces.append(yukawa)
     # integrator.forces.append(ashbaugh_table)
     integrator.forces.append(ashbaugh)
@@ -984,6 +1018,8 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='CALVADOS', resc
         tq_log.add(ashbaugh, quantities=['energies'])
         if cationpi:
             tq_log.add(cationpi_lj, quantities=['energies'])
+        if specialrepel:
+            tq_log.add(special_repel_pair, quantities=['energies', 'forces'])
         
     tq_gsd = hoomd.write.GSD(trigger=hoomd.trigger.Periodic(dt_log), 
                              filename=logfile+'_log.gsd', filter=hoomd.filter.Null(),
