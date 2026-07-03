@@ -45,6 +45,5 @@ if __name__=='__main__':
     # simulation mode
     else:
         hps.simulate_hps_like(macro_dict=macro_dict, aa_param_dict=aa_param_dict, syslist=syslist, model=args.model, rescale=args.rescale, 
-                              cationpi=args.cationpi, mode=args.mode, resize=args.boxresize, network=args.network, logenergy=args.logenergy, dump2=args.dump2, inter_detect=args.inter_detect, specialrepel=args.sp\
-ecialrepel)
+                              cationpi=args.cationpi, mode=args.mode, resize=args.boxresize, network=args.network, logenergy=args.logenergy, dump2=args.dump2, inter_detect=args.inter_detect, specialrepel=args.specialrepel)
         
