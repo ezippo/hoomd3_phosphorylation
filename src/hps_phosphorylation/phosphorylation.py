@@ -349,8 +349,6 @@ class ChangeSerine_nlist_multienzyme(hoomd.custom.Action):
 
                 self._glb_contacts.append(event)
 
-                if self._glb_changes is not None:
-                    self._glb_changes.append(event)
 
                     
 class ReservoirExchange(hoomd.custom.Action):
