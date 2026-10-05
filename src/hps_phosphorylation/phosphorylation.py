@@ -3,6 +3,7 @@ import logging
 
 import hps_phosphorylation.hoomd_util as hu
 import hoomd
+import freud
 
 def metropolis_boltzmann(dU, dmu, kT=2.494338):
     """
@@ -48,9 +49,11 @@ class ChangeSerine(hoomd.custom.Action):
         glb_changes (list, optional): Global list to record type change events (Ser to pSer or opposite), necessary only in simulation mode 'ness'. Default None.
         id_Ser_types (list, optional): List of IDs number associated with Ser in free chain and rigid body. Default [15] (no rigid body).
         id_pSer_types (list, optional): List of IDs number associated with pSer in free chain and rigid body. Default [20] (no rigid body).
+        ser_mass (float, optional): Mass of residue type SER. Default 87.08. 
+        pser_mass (float, optional): Mass of residue type SEP. Default 165.03.
 
     """
-    def __init__(self, active_serials, ser_serials, forces, glb_contacts, temp, Dmu, box_size, contact_dist, enzyme_ind, glb_changes=None, id_Ser_types=[15], id_pSer_types=[20]):
+    def __init__(self, active_serials, ser_serials, forces, glb_contacts, temp, Dmu, box_size, contact_dist, enzyme_ind, glb_changes=None, id_Ser_types=[15], id_pSer_types=[20], ser_mass=87.08, pser_mass=165.03):
         # Initialize all instance variables
         self._active_serials = active_serials
         self._ser_serials = ser_serials
@@ -64,6 +67,8 @@ class ChangeSerine(hoomd.custom.Action):
         self._glb_changes = glb_changes
         self._id_Ser_types = id_Ser_types
         self._id_pSer_types = id_pSer_types
+        self._ser_mass = ser_mass
+        self._pser_mass = pser_mass
 
     def act(self, timestep):
         """
@@ -92,15 +97,21 @@ class ChangeSerine(hoomd.custom.Action):
             for idser in range( len(self._id_Ser_types) ):      # id_Ser_types can contain only SER id, or also SER_r in case of rigid bodies  
                 # if closest residue of ser_serials is a Ser, try phosphorylation
                 if snap.particles.typeid[ser_index] == self._id_Ser_types[idser]:
-                    U_in = self._forces[0].energy + self._forces[1].energy
+                    U_in = sum(f.energy for f in self._forces)
                     snap.particles.typeid[ser_index] = self._id_pSer_types[idser]
                     self._state.set_snapshot(snap)
-                    U_fin = self._forces[0].energy + self._forces[1].energy
+                    U_fin = sum(f.energy for f in self._forces)
                     logging.debug(f"U_fin = {U_fin}, U_in = {U_in}")
 
                     # Apply the Metropolis criterion for phosphorylation
                     if metropolis_boltzmann(U_fin-U_in, self._Dmu, self._temp):
                         logging.info(f"Phosphorylation occured: SER id {ser_index}")
+                        snap.particles.mass[ser_index] = self._pser_mass
+                        snap.particles.charge[ser_index] = -2
+                        snap.particles.velocity[ser_index] = np.random.normal(0, np.sqrt(self._temp/self._pser_mass), 3)
+                        self._state.set_snapshot(snap)
+                        logging.debug(f"ChangeSer: new mass = {snap.particles.mass[ser_index]}")
+                        logging.debug(f"ChangeSer: new velocity = {snap.particles.velocity[ser_index]}")
                         self._glb_contacts += [[timestep, ser_index, 1, min_dist, U_fin-U_in, self._enzyme_ind, active_pos[0,0],active_pos[0,1],active_pos[0,2] ]]
                         if self._glb_changes is not None:
                             self._glb_changes += [[timestep, ser_index, 1, min_dist, U_fin-U_in, self._enzyme_ind, active_pos[0,0],active_pos[0,1],active_pos[0,2] ]]
@@ -121,6 +132,12 @@ class ChangeSerine(hoomd.custom.Action):
                     logging.debug(f"U_fin = {U_fin}, U_in = {U_in}")
                     if metropolis_boltzmann(U_fin-U_in, -self._Dmu, self._temp):
                         logging.info(f"Dephosphorylation occured: SER id {ser_index}")
+                        snap.particles.mass[ser_index] = self._ser_mass
+                        snap.particles.charge[ser_index] = 0
+                        snap.particles.velocity[ser_index] = np.random.normal(0, np.sqrt(self._temp/self._ser_mass), 3)
+                        self._state.set_snapshot(snap)
+                        logging.debug(f"ChangeSer: new mass = {snap.particles.mass[ser_index]}")
+                        logging.debug(f"ChangeSer: new velocity = {snap.particles.velocity[ser_index]}")
                         self._glb_contacts += [[timestep, ser_index, -1, min_dist, U_fin-U_in, self._enzyme_ind, active_pos[0,0],active_pos[0,1],active_pos[0,2] ]]
                         if self._glb_changes is not None:
                             self._glb_changes += [[timestep, ser_index, -1, min_dist, U_fin-U_in, self._enzyme_ind, active_pos[0,0],active_pos[0,1],active_pos[0,2] ]]
@@ -138,6 +155,202 @@ class ChangeSerine(hoomd.custom.Action):
                 raise Exception(f"Residue {ser_index} is not a serine!")
 
 
+
+class ChangeSerine_nlist_multienzyme(hoomd.custom.Action):
+    """
+    Custom Action to handle the phosphorylation and dephosphorylation of serines
+    during molecular dynamics simulations.
+    Compute distances between serines (or phospho-serine) in ser_serials and ezyme active site residues in active_serials. 
+    Get the closest serine. 
+    If all the distances with the active site residues are below the contact threshold contact_dist, attempt the reaction with Metropolis acceptance.
+    Modify simulation state if needed and save attempt result in list glb_contacts.
+
+    Args:
+        active_serials (list): List of enzyme active site serial numbers.
+        ser_serials (list): List of serine serial numbers.
+        forces (list): List of pair potential objects to compute energy differences.
+        glb_contacts (list): Global list to record contact events.
+        temp (float): Temperature of the system (in energy units) for the Metropolis-Boltzmann acceptance.
+        Dmu (float): Chemical potential difference for phosphorylation/dephosphorylation Metropolis step.
+        box_size (tuple): Size of the simulation box (x, y, z dimensions).
+        contact_dist (float): Distance threshold for a contact between the enzyme active site residues and a serine.
+        enzyme_ind (int): Index of the enzyme for tracking in case of multiple enzymes.
+        glb_changes (list, optional): Global list to record type change events (Ser to pSer or opposite), necessary only in simulation mode 'ness'. Default None.
+        id_Ser_types (list, optional): List of IDs number associated with Ser in free chain and rigid body. Default [15] (no rigid body).
+        id_pSer_types (list, optional): List of IDs number associated with pSer in free chain and rigid body. Default [20] (no rigid body).
+        ser_mass (float, optional): Mass of residue type SER. Default 87.08. 
+        pser_mass (float, optional): Mass of residue type SEP. Default 165.03.
+
+    """
+    def __init__(self, active_serials, ser_serials, forces, glb_contacts, temp, Dmu, box_size, contact_dist, glb_changes=None, id_Ser_types=[15], id_pSer_types=[20], ser_mass=87.08, pser_mass=165.03):
+        # Initialize all instance variables
+        self._active_serials = active_serials
+        self._ser_serials = ser_serials
+        self._forces = forces
+        self._glb_contacts = glb_contacts
+        self._temp = temp
+        self._Dmu = Dmu
+        self._box_size = box_size
+        self._contact_dist = contact_dist
+        self._glb_changes = glb_changes
+        self._id_Ser_types = id_Ser_types
+        self._id_pSer_types = id_pSer_types
+        self._ser_mass = ser_mass
+        self._pser_mass = pser_mass
+
+    def act(self, timestep):
+        """
+        Executes the phosphorylation or dephosphorylation based on the enzyme-serine proximity and energy.
+
+        Args:
+            timestep (int): The current timestep of the simulation, standard act definition (see HOOMD-blue v3 docmentation).
+
+        Raises:
+            Exception: If the residue is not Ser or pSer (typeid other than 15 or 20).
+        """
+        snap = self._state.get_snapshot()     # Get the simulation snapshot
+        if snap.communicator.rank != 0:
+            return
+        positions = snap.particles.position      # Get the positions of particles
+        typeid = snap.particles.typeid
+        
+        ser_pos = positions[self._ser_serials]     # substrates serines positions
+        
+        # Build freud box
+        box = freud.box.Box.from_box(snap.configuration.box)
+            
+        # Build neighbor query on substrate
+        aq = freud.locality.AABBQuery(box, ser_pos)
+
+        # avoid multiple enzymes modifying same residue
+        used_serines = set()
+
+        # Loop over enzymes
+        for enzyme_ind, active_ids in enumerate(self._active_serials):
+            logging.debug(f"ChangeSerine_multi : enzyme {enzyme_ind}")
+            active_pos = positions[active_ids]
+            candidate_sets = []
+            distance_maps = []
+
+            # For each active bead: collect neighboring substrate beads
+            for aa_pos in active_pos:
+                result = aq.query(aa_pos.reshape(1, 3), {"r_max": self._contact_dist})
+                nlist = result.toNeighborList()
+                ser_local = nlist.point_indices  # local substrate indices
+                if len(ser_local) == 0:   # EARLY ABORT
+                    candidate_sets = []
+                    break
+
+                candidate_sets.append(set(ser_local))
+                distance_maps.append(dict(zip(ser_local, nlist.distances)))
+
+            if not candidate_sets:
+                continue
+            
+            # Intersect neighbor sets
+            # substrate bead must be close to ALL active-site beads
+            common = set.intersection(*candidate_sets)
+
+            if not common:
+                continue
+
+            # Find closest valid substrate
+            best_ser = None
+            best_dist = np.inf
+            for ser_local in common:
+                ser_index = self._ser_serials[ser_local]
+                # avoid double modification
+                if ser_index in used_serines:
+                    continue
+
+                max_dist = max(dmap[ser_local] for dmap in distance_maps) # maximum distance to active-site beads
+                if max_dist < best_dist:
+                    best_dist = max_dist
+                    best_ser = ser_local
+
+            if best_ser is None:
+                continue
+
+            ser_index = self._ser_serials[best_ser]
+
+            used_serines.add(ser_index)
+
+            current_type = typeid[ser_index]
+        
+            move_found = False        
+            for idser in range( len(self._id_Ser_types) ):      # id_Ser_types can contain only SER id, or also SER_r in case of rigid bodies  
+                # PHOSPHORYLATION: if closest residue of ser_serials is a Ser, try phosphorylation
+                if current_type == self._id_Ser_types[idser]:
+                    old_type = self._id_Ser_types[idser]
+                    new_type = self._id_pSer_types[idser]
+                    delta_mu = self._Dmu[enzyme_ind]
+                    accepted_flag = 1
+                    rejected_flag = 0
+                    new_mass = self._pser_mass
+                    new_charge = -2
+                    move_found = True
+                    break
+            
+                # DEPHOSPHORYLATION : if closest residue of ser_serials is a pSer, try de-phosphorylation
+                elif current_type == self._id_pSer_types[idser]:
+                    old_type = self._id_pSer_types[idser]
+                    new_type = self._id_Ser_types[idser]
+                    delta_mu = -self._Dmu[enzyme_ind]
+                    accepted_flag = -1
+                    rejected_flag = 2
+                    new_mass = self._ser_mass
+                    new_charge = 0
+                    move_found = True
+                    break
+            
+            if not move_found:
+                raise Exception(f"Residue {ser_index} is not a serine!")
+                
+            # INITIAL ENERGY
+            U_in = sum(f.energy for f in self._forces)
+
+            # PROPOSE TYPE CHANGE
+            snap.particles.typeid[ser_index] = new_type
+            self._state.set_snapshot(snap)
+        
+            # FINAL ENERGY
+            U_fin = sum(f.energy for f in self._forces)
+            delta_U = U_fin - U_in
+            logging.debug(f"U_fin={U_fin}, U_in={U_in}, dU={delta_U}")
+        
+            # METROPOLIS TEST
+            accepted = metropolis_boltzmann(delta_U, delta_mu, self._temp)
+            if accepted:
+                logging.info(f"Reaction accepted: residue {ser_index}")
+
+                snap = self._state.get_snapshot()
+
+                snap.particles.mass[ser_index] = new_mass
+                snap.particles.charge[ser_index] = new_charge
+                snap.particles.velocity[ser_index] = np.random.normal(0, np.sqrt(self._temp/new_mass), 3)
+                self._state.set_snapshot(snap)
+            
+                event = [timestep, ser_index, accepted_flag, best_dist, delta_U, enzyme_ind, 
+                         positions[ser_index, 0], positions[ser_index, 1], positions[ser_index, 2]]
+
+                self._glb_contacts.append(event)
+
+                if self._glb_changes is not None:
+                    self._glb_changes.append(event)
+        
+            else:   # REJECT MOVE
+                logging.info(f"Reaction rejected: residue {ser_index}")
+                snap = self._state.get_snapshot()
+                snap.particles.typeid[ser_index] = old_type
+                self._state.set_snapshot(snap)
+            
+                event = [timestep, ser_index, rejected_flag, best_dist, delta_U, enzyme_ind, 
+                         positions[ser_index, 0], positions[ser_index, 1], positions[ser_index, 2]]
+
+                self._glb_contacts.append(event)
+
+
+                    
 class ReservoirExchange(hoomd.custom.Action):
     """
     Action for performing reservoir exchange with serine residues in a simulation.
@@ -157,9 +370,10 @@ class ReservoirExchange(hoomd.custom.Action):
         bath_dist (float): Minimum distance threshold for reservoir exchange.
         id_Ser_types (list, optional): List of IDs number associated with Ser in free chain and rigid body. Default [15] (no rigid body).
         id_pSer_types (list, optional): List of IDs number associated with pSer in free chain and rigid body. Default [20] (no rigid body).
-
+        ser_mass (float, optional): Mass of residue type SER. Default 87.08. 
+        pser_mass (float, optional): Mass of residue type SEP. Default 165.03.
     """
-    def __init__(self, active_serials, ser_serials, forces, glb_changes, temp, Dmu, box_size, bath_dist, id_Ser_types=[15], id_pSer_types=[20]):
+    def __init__(self, active_serials, ser_serials, forces, glb_changes, temp, Dmu, box_size, bath_dist, id_Ser_types=[15], id_pSer_types=[20], ser_mass=87.08, pser_mass=165.03):
         self._active_serials = active_serials
         self._ser_serials = ser_serials
         self._forces = forces
@@ -170,6 +384,8 @@ class ReservoirExchange(hoomd.custom.Action):
         self._bath_dist = bath_dist
         self._id_Ser_types = id_Ser_types
         self._id_pSer_types = id_pSer_types
+        self._ser_mass = ser_mass
+        self._pser_mass = pser_mass
         
     def act(self, timestep):
         """
@@ -203,6 +419,12 @@ class ReservoirExchange(hoomd.custom.Action):
                     U_fin = self._forces[0].energy + self._forces[1].energy
                     logging.debug(f"U_fin = {U_fin}, U_in = {U_in}")
                     if metropolis_boltzmann(U_fin-U_in, 0, self._temp):
+                        snap.particles.mass[ser_index] = self._pser_mass
+                        snap.particles.charge[ser_index] = -2
+                        snap.particles.velocity[ser_index] = np.random.normal(0, np.sqrt(self._temp/self._pser_mass), 3)
+                        self._state.set_snapshot(snap)
+                        logging.debug(f"ReservoirExchange: new mass = {snap.particles.mass[ser_index]}")
+                        logging.debug(f"ReservoirExchange: new velocity = {snap.particles.velocity[ser_index]}")
                         self._glb_changes += [[timestep, ser_index, 10, min_dist, U_fin-U_in, -1, active_pos[0,0],active_pos[0,1],active_pos[0,2] ]]
                         logging.debug(f"Reservoir exchange Ser -> pSer: SER id {ser_index}")
                     else:
@@ -218,6 +440,12 @@ class ReservoirExchange(hoomd.custom.Action):
                     U_fin = self._forces[0].energy + self._forces[1].energy
                     logging.debug(f"U_fin = {U_fin}, U_in = {U_in}")
                     if metropolis_boltzmann(U_fin-U_in, 0, self._temp):
+                        snap.particles.mass[ser_index] = self._ser_mass
+                        snap.particles.charge[ser_index] = 0
+                        snap.particles.velocity[ser_index] = np.random.normal(0, np.sqrt(self._temp/self._ser_mass), 3)
+                        self._state.set_snapshot(snap)
+                        logging.debug(f"ReservoirExchange: new mass = {snap.particles.mass[ser_index]}")
+                        logging.debug(f"ReservoirExchange: new velocity = {snap.particles.velocity[ser_index]}")
                         self._glb_changes += [[timestep, ser_index, -10, min_dist, U_fin-U_in, -1, active_pos[0,0],active_pos[0,1],active_pos[0,2] ]]
                         logging.debug(f"Reservoir exchange pSer -> Ser: SEP id {ser_index}")
                     else:
@@ -248,7 +476,7 @@ class ContactDetector(hoomd.custom.Action):
         enzyme_ind (int): Index of the enzyme.
         displ_as_pos (ndarray, optional): Array with list of displacement vectors for each active site residue. Default None, no displacement.
         reference_vector (ndarray, optional): Array with reference vector to compute the rotation of the rigid body with the active site. Needed in case of displacement (displ_as_pos not None). Default None.
-"""
+    """
     def __init__(self, active_serials, ser_serials, glb_contacts, box_size, contact_dist, enzyme_ind):
         self._active_serials = active_serials
         self._ser_serials = ser_serials
@@ -280,6 +508,72 @@ class ContactDetector(hoomd.custom.Action):
             logging.debug(f"ChangeSerine: ser_index {ser_index}")
             self._glb_contacts += [[timestep, ser_index, -2, min_dist, 0., self._enzyme_ind, active_pos[0,0],active_pos[0,1],active_pos[0,2] ]]
             
+
+class InteractionsDetector(hoomd.custom.Action):
+    """
+    Action for detecting contacts between active sites and serine residues in a simulation.
+
+    This class detects when any active site comes within a specified distance of serine residues.
+    It records these contact events along with relevant details.
+
+    Args:
+        active_serials (list of int): Indices of the active sites.
+        ser_serials (list of int): Indices of the serine residues.
+        glb_contacts (list of list): List to record contact events.
+        box_size (list of float): Size of the simulation box.
+        contact_dist (float): Distance threshold for detecting contacts.
+        enzyme_ind (int): Index of the enzyme.
+        displ_as_pos (ndarray, optional): Array with list of displacement vectors for each active site residue. Default None, no displacement.
+        reference_vector (ndarray, optional): Array with reference vector to compute the rotation of the rigid body with the active site. Needed in case of displacement (displ_as_pos not None). Default None.
+    """
+    def __init__(self, probe_serials, bulk_serials, interaction_file, interaction_dist=1.0):
+        self._probe_serials = probe_serials
+        self._bulk_serials = bulk_serials
+        self._interaction_file = interaction_file
+        self._interaction_dist = interaction_dist
+        
+    def act(self, timestep):
+        """
+        Executes the contact detection action at a given timestep.
+
+        Args:
+            timestep (int): The current timestep of the simulation, standard act definition (see HOOMD-blue v3 docmentation).
+        """
+        snap = self._state.get_snapshot()     # get simulation state
+        # MPI safety
+        if snap.communicator.rank != 0:
+            return
+            
+        pos = snap.particles.position  
+        bulk_pos = snap.particles.position[self._bulk_serials]  
+        probe_pos = snap.particles.position[self._probe_serials]    # get active site positions
+        box = freud.box.Box.from_box(snap.configuration.box)
+
+        # Neighbor search
+        aq = freud.locality.AABBQuery(box, bulk_pos)
+        result = aq.query(probe_pos,
+            {"r_max": self._interaction_dist,
+             "exclude_ii": True} )
+        nlist = result.toNeighborList()
+        distances = nlist.distances
+
+        # Convert local -> global ids
+        probe_local = nlist.query_point_indices
+        bulk_local = nlist.point_indices
+        probe_global = self._probe_serials[probe_local]
+        bulk_global = self._bulk_serials[bulk_local]
+
+        # Save results
+        if len(distances) > 0:
+            data = np.column_stack([
+                np.full(len(distances), timestep),
+                probe_global,
+                bulk_global,
+                distances  ])
+
+            with open(self._interaction_file, "a") as f:
+                np.savetxt(f, data, fmt=["%d", "%d", "%d", "%.5f"])
+                
 
 class ContactsBackUp(hoomd.custom.Action):
     """

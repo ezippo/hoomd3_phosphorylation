@@ -591,7 +591,7 @@ def create_init_configuration(filename, syslist, aa_param_dict, box_length, resc
         fout.close()
 
 
-def create_init_configuration_network(filename, network_file, syslist, aa_param_dict, box_length, rescale=0):
+def create_init_configuration_network(filename, network_file, syslist, aa_param_dict, box_length, rescale=0, specialrepel=False):
     """
     Create an initial configuration for a HOOMD simulation and save it to a GSD file.
     
@@ -601,6 +601,7 @@ def create_init_configuration_network(filename, network_file, syslist, aa_param_
     - aa_param_dict: dict, amino acid parameters
     - box_length: float, length of the cubic simulation box
     - rescale: percentage of rescaling to use for folded domain interactions, here necessary to create rescaled amino acid types (default 0, no rescaled types)
+    - specialrepel: bool, default False, create coulomb repulsion between enzymes
     """
     from sklearn.neighbors import radius_neighbors_graph
 
@@ -632,6 +633,8 @@ def create_init_configuration_network(filename, network_file, syslist, aa_param_
     positions = hu.generate_positions_cubic_lattice(n_chains, box_length)
     
     ### LOOP ON THE MOLECULES TYPE
+    if specialrepel:
+        enz_ind = []
     n_prev_mol = 0
     n_prev_res = 0
     network_distances = []
@@ -655,6 +658,9 @@ def create_init_configuration_network(filename, network_file, syslist, aa_param_
         n_mol_chains = int(mol_dict['N'])
             
         mol_pos = np.concatenate([list(chain_rel_pos+positions[n_prev_mol+i_chain]) for i_chain in range(n_mol_chains)])
+
+        if specialrepel and mol_dict['active_sites']!='0':
+            enz_ind.extend([[n_prev_res + i+i_chain*chain_length for i in range(0,chain_length,10)] for i_chain in range(n_mol_chains) ])
 
         # elastic network
         tmp_network_id = []
@@ -734,6 +740,25 @@ def create_init_configuration_network(filename, network_file, syslist, aa_param_
     s.bonds.group += bond_pairs
     print(len(bond_id))
 
+    # add special pairs in snapshot 
+    if specialrepel:
+        if len(enz_ind)>1:
+            # create cross pairs between enzymes
+            from itertools import combinations, product
+            sprep_pairs = [p for a,b in combinations(enz_ind,2) for p in product(a,b)]
+            
+            s.pairs.N = len(sprep_pairs)
+            s.pairs.types = ['lj_rep']
+            s.pairs.typeid = [0]*len(sprep_pairs)
+            s.pairs.group = sprep_pairs
+            print(s.pairs.N)
+            print(s.pairs.types)
+            print(s.pairs.typeid)
+            print(s.pairs.group)
+
+        else:
+            print('Flag --specialrepel was used, but only one enzyme is in the box. No additional special repulsion implemented.')
+
     with gsd.hoomd.open(name=filename, mode='wb') as fout:
         fout.append(s)
         fout.close()
@@ -750,7 +775,7 @@ def create_init_configuration_network(filename, network_file, syslist, aa_param_
 
 ### --------------------------------- SIMULATION MODE ------------------------------------------------
 
-def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0, cationpi=False, mode='relax', resize=None, network=None, logenergy=False):
+def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='CALVADOS', rescale=0, cationpi=False, mode='relax', resize=None, network=None, logenergy=False, dump2=None, inter_detect=None, specialrepel=False):
     # UNITS: distance -> nm   (!!!positions and sigma in files are in agstrom!!!)
     #        mass -> amu
     #        energy -> kJ/mol
@@ -872,6 +897,12 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
     # groups
     all_group = hoomd.filter.All()
     moving_group = hoomd.filter.Rigid(("center", "free"))
+    if dump2 is not None:
+        name2 = syslist[1]['mol']
+        skip_beads1 = chain_lengths_l[0]*int(syslist[0]['N'])
+        n_beads2 = chain_lengths_l[1]*int(syslist[1]['N'])
+        tags2 = [i for i in range(skip_beads1, skip_beads1+n_beads2)]    
+        prot2_group = hoomd.filter.Tags(tags2)
     
     ## PAIR INTERACTIONS
     # neighbor list
@@ -904,7 +935,14 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
             harmonic.params[net_name] = dict(k=8033, r0=net_distance)
         for net_name, net_distance in zip(network_names, network_distances):
             harmonic.params[net_name] = dict(k=700, r0=net_distance)
-        
+
+    # special repulsion pairs 
+    if specialrepel:
+        special_repel_pair = hoomd.md.special_pair.LJ()
+        special_repel_pair.params['lj_rep'] = dict(epsilon=temp/100, sigma=12.0)
+        special_repel_pair.r_cut['lj_rep'] = 2**(1/6)*12.0
+        logging.debug(f"SPECIAL PAIR : LJ repulsive: epsilon={temp/10}, r_cut=2^(1/6)*sigma, sigma=12")
+
     # electrostatics forces
     yukawa = yukawa_pair_potential(cell, aa_type, R_type_list, aa_charge, model, production_T, ionic, rescale)
     
@@ -924,14 +962,14 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
     # method : Langevin thermostat
     langevin = hoomd.md.methods.Langevin(filter=moving_group, kT=temp)
     for i,name in enumerate(aa_type):
-        langevin.gamma[name] = aa_mass[i]/1000.0
+        langevin.gamma[name] = aa_mass[i]/100.0
         langevin.gamma_r[name] = (0.0, 0.0, 0.0)
     if rescale!=0:
         for i,name in enumerate(aa_type_r):
-            langevin.gamma[name] = aa_mass[i]/1000.0
+            langevin.gamma[name] = aa_mass[i]/100.0
             langevin.gamma_r[name] = (0.0, 0.0, 0.0)
     for i in range( len(rigid_masses_l) ):
-        langevin.gamma['R'+str(i+1)] = rigid_masses_l[i]/1000.0
+        langevin.gamma['R'+str(i+1)] = rigid_masses_l[i]/100.0
         langevin.gamma_r['R'+str(i+1)] = (4.0, 4.0, 4.0)
         
     # constraints : rigid body
@@ -940,6 +978,8 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
     
     # forces 
     integrator.forces.append(harmonic)
+    if specialrepel:
+        integrator.forces.append(special_repel_pair)
     integrator.forces.append(yukawa)
     # integrator.forces.append(ashbaugh_table)
     integrator.forces.append(ashbaugh)
@@ -951,6 +991,10 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
     # dump files
     dump_gsd = hoomd.write.GSD(trigger=hoomd.trigger.Periodic(dt_dump), 
                                filename=logfile+'_dump.gsd', filter=all_group,
+                               dynamic=['property', 'momentum', 'attribute', 'topology'])                  # you can add [attributes(particles/typeid)] to trace phosphorylation
+    if dump2 is not None:
+        dump2_gsd = hoomd.write.GSD(trigger=hoomd.trigger.Periodic(dump2), 
+                               filename=logfile+f'_dump_{name2}.gsd', filter=prot2_group,
                                dynamic=['property', 'momentum', 'attribute', 'topology'])                  # you can add [attributes(particles/typeid)] to trace phosphorylation
     
     # back-up files
@@ -974,6 +1018,8 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
         tq_log.add(ashbaugh, quantities=['energies'])
         if cationpi:
             tq_log.add(cationpi_lj, quantities=['energies'])
+        if specialrepel:
+            tq_log.add(special_repel_pair, quantities=['energies', 'forces'])
         
     tq_gsd = hoomd.write.GSD(trigger=hoomd.trigger.Periodic(dt_log), 
                              filename=logfile+'_log.gsd', filter=hoomd.filter.Null(),
@@ -984,6 +1030,23 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
     time_start = time.time()
     time_action = hu.PrintTimestep(time_start, production_steps)
     time_writer = hoomd.write.CustomWriter(action=time_action, trigger=hoomd.trigger.Periodic(dt_time))
+    
+    # ### Interaction detector
+    if inter_detect is not None:
+        contact_dist = float(macro_dict['contact_dist'])
+        print(contact_dist)
+        which_mol = [syslist[mm]['mol'] for mm in range(n_mols)].index(inter_detect)
+        prev_ids = 0
+        for mm in range(which_mol):
+            prev_ids += int(syslist[mm]['N'])*chain_lengths_l[mm]
+        n_probe = int(syslist[which_mol]['N'])*chain_lengths_l[which_mol]
+        probe_serials = np.arange(prev_ids, prev_ids + n_probe)
+        bulk_serials = np.arange(len(type_id))
+        bulk_serials = np.concatenate([np.arange(0, prev_ids), np.arange(prev_ids + n_probe, len(type_id))])
+        print(probe_serials)
+        print(bulk_serials)
+        inter_detect_action = phospho.InteractionsDetector(probe_serials, bulk_serials, interaction_file=logfile+'_interactions.txt', interaction_dist=contact_dist)
+        inter_detect_updater = hoomd.update.CustomUpdater(action=inter_detect_action, trigger=hoomd.trigger.Periodic(dt_dump)) 
     
     # ### if there are no active sites, we don't need to check distances or have phosphorylations
     if len(active_serials_l)!=0:
@@ -1007,7 +1070,7 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
         else:
             Dmu_array = macro_dict['Dmu']     # 1 Delta mu per enzyme
             if isinstance(Dmu_array, str):
-                Dmu_array = [Dmu_array]
+                Dmu_array = np.array([Dmu_array])
             if len(Dmu_array) != len(active_serials_l):
                 raise ValueError('ERROR: parameter Dmu in input file must match the number of enzymes in the simulation!')
 
@@ -1028,22 +1091,27 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
 
                 for i,active_serial in enumerate(active_serials_l):
                     bath_actions_l += [ phospho.ReservoirExchange(active_serials=active_serial, ser_serials=ser_serials, 
-                                            forces=forces_list, glb_changes=changes, temp=temp, 
-                                            Dmu=float(Dmu_array[i]), box_size=box_size, bath_dist=bath_dist)]
+                                            forces=forces_list, glb_changes=changes, temp=temp, Dmu=float(Dmu_array[i]),
+                                            box_size=box_size, bath_dist=bath_dist, ser_mass=aa_mass[15], pser_mass=aa_mass[20])]
                     bath_updaters_l += [ hoomd.update.CustomUpdater(action=bath_actions_l[-1], trigger=hoomd.trigger.Periodic(dt_bath)) ]
 
                 # backup action
                 changes_action = phospho.ChangesBackUp(glb_changes=changes, logfile=logfile)
                 changes_bckp_writer = hoomd.write.CustomWriter(action=changes_action, trigger=hoomd.trigger.Periodic(int(dt_backup/2)))
             
-            changeser_actions_l = []
-            changeser_updaters_l = []
-            for i,active_serial in enumerate(active_serials_l):
-                changeser_actions_l += [ phospho.ChangeSerine(active_serials=active_serial, ser_serials=ser_serials, forces=forces_list, 
-                                            glb_contacts=contacts, temp=temp, Dmu=float(Dmu_array[i]), box_size=box_size, contact_dist=contact_dist, 
-                                            enzyme_ind=i, glb_changes=changes) ]
-                changeser_updaters_l += [ hoomd.update.CustomUpdater(action=changeser_actions_l[-1], trigger=hoomd.trigger.Periodic(dt_try_change)) ]
+            #changeser_actions_l = []
+            #changeser_updaters_l = []
+            #for i,active_serial in enumerate(active_serials_l):
+            #    changeser_actions_l += [ phospho.ChangeSerine(active_serials=active_serial, ser_serials=ser_serials, forces=forces_list, 
+            #                                glb_contacts=contacts, temp=temp, Dmu=float(Dmu_array[i]), box_size=box_size, contact_dist=contact_dist, 
+            #                                enzyme_ind=i, glb_changes=changes, ser_mass=aa_mass[15], pser_mass=aa_mass[20]) ]
+            #    changeser_updaters_l += [ hoomd.update.CustomUpdater(action=changeser_actions_l[-1], trigger=hoomd.trigger.Periodic(dt_try_change)) ]
 
+            changeser_action = phospho.ChangeSerine_nlist_multienzyme(active_serials=active_serials_l, ser_serials=ser_serials, forces=forces_list,
+                                            glb_contacts=contacts, temp=temp, Dmu=Dmu_array.astype(float), box_size=box_size, contact_dist=contact_dist,
+                                            glb_changes=changes, ser_mass=aa_mass[15], pser_mass=aa_mass[20]) 
+            changeser_updater = hoomd.update.CustomUpdater(action=changeser_action, trigger=hoomd.trigger.Periodic(dt_try_change))
+            
         # backup action    
         contacts_action = phospho.ContactsBackUp(glb_contacts=contacts, logfile=logfile)
         contacts_bckp_writer = hoomd.write.CustomWriter(action=contacts_action, trigger=hoomd.trigger.Periodic(int(dt_backup/2)))
@@ -1063,17 +1131,22 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
     sim.operations.computes.append(therm_quantities)
 
     sim.operations.writers.append(dump_gsd)
+    if dump2 is not None:
+        sim.operations.writers.append(dump2_gsd)
     sim.operations.writers.append(backup1_gsd)
     sim.operations.writers.append(backup2_gsd)
     sim.operations.writers.append(tq_gsd)
     sim.operations += time_writer
+    if inter_detect is not None:
+        sim.operations += inter_detect_updater
     if len(active_serials_l)!=0:
         if mode == 'nophospho':
             for i in range(len(active_serials_l)):
                 sim.operations += detector_updaters_l[i]
         else:    
-            for i in range(len(active_serials_l)):
-                sim.operations += changeser_updaters_l[i]
+            #for i in range(len(active_serials_l)):
+            #    sim.operations += changeser_updaters_l[i]
+            sim.operations += changeser_updater
             if mode == 'ness':
                 for i in range(len(active_serials_l)):
                     sim.operations += bath_updaters_l[i]
@@ -1109,31 +1182,4 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='HPS', rescale=0
     hoomd.write.GSD.write(state=sim.state, filename=logfile+'_end.gsd')
 
 
-if __name__=='__main__':
-    import sys
-    sys.path.append('/localscratch/zippoema/lib/ashbaugh_plugin/build/')
-    
-    infile = '/localscratch/zippoema/git/hoomd3_phosphorylation/example/simulation_200tdp43-LCD_2full-ck1d/input_300K.in'
-    macro_dict = hu.macros_from_infile(infile)
-    aa_param_dict = hu.aa_stats_from_file(macro_dict['stat_file'])
-    syslist = hu.system_from_file(macro_dict['sysfile'])
-    reord = hu.reordering_index(syslist)
-
-    aa_type = list(aa_param_dict.keys())
-    aa_charge = []
-    aa_sigma = []
-    aa_lambda =[]
-    for k in aa_type:
-        aa_charge.append(aa_param_dict[k][1])
-        aa_sigma.append(aa_param_dict[k][2])
-        aa_lambda.append(aa_param_dict[k][3])
-    cell = hoomd.md.nlist.Cell(buffer=0.4, exclusions=('bond', 'body'))
-    print(aa_lambda)
-    yuk1 = yukawa_pair_potential_new(cell, aa_type, ['R1','R2'], aa_charge, model='HPS', temp=300, ionic=0.100, rescale=0)
-    yuk = yukawa_pair_potential(cell, aa_type, ['R1','R2'], aa_charge, model='HPS', temp=300, ionic=0.100, rescale=0)
-
-    print(yuk.params==yuk1.params)
-
-
-
-
+#if __name__=='__main__':
