@@ -1,0 +1,4 @@
+# mol	pdb				        N	rigid			   active_sites		phospho_sites
+TDP43	input_stats/com_full-tdp43_no-helix.pdb		150	3-78,104-178,191-259	    	0		        SER
+CK1d    input_stats/com_ck1delta-open.pdb       5       1-292    		      0             0
+
