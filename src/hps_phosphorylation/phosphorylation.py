@@ -403,11 +403,11 @@ class ReservoirExchange(hoomd.custom.Action):
         # compute distance
         distances = hu.compute_distances_pbc(active_pos, positions[self._ser_serials],  self._box_size[0], self._box_size[1], self._box_size[2])
         distances = np.min(distances, axis=0)
-        min_dist = np.max(distances)   # get the distance of the farthest Ser from the active site
+        max_dist = np.max(distances)   # get the distance of the farthest Ser from the active site
         
         # if all distances from the farthest Ser to the residues of the active site are larger than bath_dist, attemp to switch particle type
-        if min_dist>self._bath_dist:
-            ser_index = self._ser_serials[np.argmin(distances)]
+        if max_dist>self._bath_dist:
+            ser_index = self._ser_serials[np.argmax(distances)]
 
             bug_counter = 0
             for idser in range( len(self._id_Ser_types) ):      # id_Ser_types can contain only SER id, or also SER_r in case of rigid bodies  
@@ -425,7 +425,7 @@ class ReservoirExchange(hoomd.custom.Action):
                         self._state.set_snapshot(snap)
                         logging.debug(f"ReservoirExchange: new mass = {snap.particles.mass[ser_index]}")
                         logging.debug(f"ReservoirExchange: new velocity = {snap.particles.velocity[ser_index]}")
-                        self._glb_changes += [[timestep, ser_index, 10, min_dist, U_fin-U_in, -1, active_pos[0,0],active_pos[0,1],active_pos[0,2] ]]
+                        self._glb_changes += [[timestep, ser_index, 10, max_dist, U_fin-U_in, -1, active_pos[0,0],active_pos[0,1],active_pos[0,2] ]]
                         logging.debug(f"Reservoir exchange Ser -> pSer: SER id {ser_index}")
                     else:
                         snap.particles.typeid[ser_index] = self._id_Ser_types[idser]
@@ -446,7 +446,7 @@ class ReservoirExchange(hoomd.custom.Action):
                         self._state.set_snapshot(snap)
                         logging.debug(f"ReservoirExchange: new mass = {snap.particles.mass[ser_index]}")
                         logging.debug(f"ReservoirExchange: new velocity = {snap.particles.velocity[ser_index]}")
-                        self._glb_changes += [[timestep, ser_index, -10, min_dist, U_fin-U_in, -1, active_pos[0,0],active_pos[0,1],active_pos[0,2] ]]
+                        self._glb_changes += [[timestep, ser_index, -10, max_dist, U_fin-U_in, -1, active_pos[0,0],active_pos[0,1],active_pos[0,2] ]]
                         logging.debug(f"Reservoir exchange pSer -> Ser: SEP id {ser_index}")
                     else:
                         snap.particles.typeid[ser_index] = self._id_pSer_types[idser]
@@ -553,7 +553,7 @@ class InteractionsDetector(hoomd.custom.Action):
         aq = freud.locality.AABBQuery(box, bulk_pos)
         result = aq.query(probe_pos,
             {"r_max": self._interaction_dist,
-             "exclude_ii": True} )
+             "exclude_ii": False} )
         nlist = result.toNeighborList()
         distances = nlist.distances
 
