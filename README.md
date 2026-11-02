@@ -102,12 +102,6 @@ You can specify the input parameters and the type of simulation you want through
 
   --logenergy    :   If specified, the log file will store also the potential energy acting on each particle for each pair potential.
 
-  --dump2    :    Time interval for the dumping of a second additional dump file, containing only the chains of the second species specified in the system file. 
-                  If None, no second dump file is created.
-
-  --inter_detect    :    Name of the molecule (as give in system file) to use as probe for the detection of the interactions with the other molecules. 
-                         The cutoff radius for the interactions is "contact_dist" in input file. If inter-detect is not specified, no interactions are computed.
-
 
 **Input file**
 
