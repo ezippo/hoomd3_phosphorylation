@@ -1,10 +1,10 @@
 # hoomd3_phosphorylation
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.15207491.svg)](https://doi.org/10.5281/zenodo.15207491)
 
-Repository with code used in Zippo, E., Dormann, D., Speck, T. & Stelzl, L.L. Molecular simulations of enzymatic phosphorylation of
-disordered proteins and their condensates, *Nat.Commun.* (2025), doi: https://doi.org/10.1038/s41467-025-59676-4 .
+Code from Zippo, E., Dormann, D., Speck, T. & Stelzl, L.L. Molecular simulations of enzymatic phosphorylation of
+disordered proteins and their condensates, *Nat.Commun.* (2025), doi: https://doi.org/10.1038/s41467-025-59676-4 ,
+used in Zadorozhna, Y., Uliana, F., Zippo, E., et al. Phase separation behavior of TDP-43 governs its protein interactome 
+and regulation of alternative splicing, BiorXiv (2026), https://doi.org/10.64898/2026.04.06.716630 .
 
-Supporting data can be found on the Zenodo platform (Zippo, E. (2024). Supporting Data: Molecular simulations of enzymatic phosphorylation of disordered proteins and their condensates. Zenodo. https://doi.org/10.5281/zenodo.13833526).
 
 It contains the framework to easily run coarse-grained Molecular Dynamics (MD) simulations of multi-domain proteins with phosphorylation reaction Monte Carlo steps using HPS-derived models<sup>1</sup>.
 
