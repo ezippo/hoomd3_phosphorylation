@@ -775,7 +775,7 @@ def create_init_configuration_network(filename, network_file, syslist, aa_param_
 
 ### --------------------------------- SIMULATION MODE ------------------------------------------------
 
-def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='CALVADOS', rescale=0, cationpi=False, mode='relax', resize=None, network=None, logenergy=False, dump2=None, inter_detect=None, specialrepel=False):
+def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='CALVADOS', rescale=0, cationpi=False, mode='relax', resize=None, network=None, logenergy=False, specialrepel=False):
     # UNITS: distance -> nm   (!!!positions and sigma in files are in agstrom!!!)
     #        mass -> amu
     #        energy -> kJ/mol
@@ -897,12 +897,6 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='CALVADOS', resc
     # groups
     all_group = hoomd.filter.All()
     moving_group = hoomd.filter.Rigid(("center", "free"))
-    if dump2 is not None:
-        name2 = syslist[1]['mol']
-        skip_beads1 = chain_lengths_l[0]*int(syslist[0]['N'])
-        n_beads2 = chain_lengths_l[1]*int(syslist[1]['N'])
-        tags2 = [i for i in range(skip_beads1, skip_beads1+n_beads2)]    
-        prot2_group = hoomd.filter.Tags(tags2)
     
     ## PAIR INTERACTIONS
     # neighbor list
@@ -992,11 +986,7 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='CALVADOS', resc
     dump_gsd = hoomd.write.GSD(trigger=hoomd.trigger.Periodic(dt_dump), 
                                filename=logfile+'_dump.gsd', filter=all_group,
                                dynamic=['property', 'momentum', 'attribute', 'topology'])                  # you can add [attributes(particles/typeid)] to trace phosphorylation
-    if dump2 is not None:
-        dump2_gsd = hoomd.write.GSD(trigger=hoomd.trigger.Periodic(dump2), 
-                               filename=logfile+f'_dump_{name2}.gsd', filter=prot2_group,
-                               dynamic=['property', 'momentum', 'attribute', 'topology'])                  # you can add [attributes(particles/typeid)] to trace phosphorylation
-    
+     
     # back-up files
     sim_info_log = hoomd.logging.Logger()
     sim_info_log.add(sim)
@@ -1030,23 +1020,6 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='CALVADOS', resc
     time_start = time.time()
     time_action = hu.PrintTimestep(time_start, production_steps)
     time_writer = hoomd.write.CustomWriter(action=time_action, trigger=hoomd.trigger.Periodic(dt_time))
-    
-    # ### Interaction detector
-    if inter_detect is not None:
-        contact_dist = float(macro_dict['contact_dist'])
-        print(contact_dist)
-        which_mol = [syslist[mm]['mol'] for mm in range(n_mols)].index(inter_detect)
-        prev_ids = 0
-        for mm in range(which_mol):
-            prev_ids += int(syslist[mm]['N'])*chain_lengths_l[mm]
-        n_probe = int(syslist[which_mol]['N'])*chain_lengths_l[which_mol]
-        probe_serials = np.arange(prev_ids, prev_ids + n_probe)
-        bulk_serials = np.arange(len(type_id))
-        bulk_serials = np.concatenate([np.arange(0, prev_ids), np.arange(prev_ids + n_probe, len(type_id))])
-        print(probe_serials)
-        print(bulk_serials)
-        inter_detect_action = phospho.InteractionsDetector(probe_serials, bulk_serials, interaction_file=logfile+'_interactions.txt', interaction_dist=contact_dist)
-        inter_detect_updater = hoomd.update.CustomUpdater(action=inter_detect_action, trigger=hoomd.trigger.Periodic(dt_dump)) 
     
     # ### if there are no active sites, we don't need to check distances or have phosphorylations
     if len(active_serials_l)!=0:
@@ -1131,14 +1104,10 @@ def simulate_hps_like(macro_dict, aa_param_dict, syslist, model='CALVADOS', resc
     sim.operations.computes.append(therm_quantities)
 
     sim.operations.writers.append(dump_gsd)
-    if dump2 is not None:
-        sim.operations.writers.append(dump2_gsd)
     sim.operations.writers.append(backup1_gsd)
     sim.operations.writers.append(backup2_gsd)
     sim.operations.writers.append(tq_gsd)
     sim.operations += time_writer
-    if inter_detect is not None:
-        sim.operations += inter_detect_updater
     if len(active_serials_l)!=0:
         if mode == 'nophospho':
             for i in range(len(active_serials_l)):
