@@ -1,0 +1,1 @@
+{"nodes": [154, 30, 2], "learn_rate": 0.005, "batch_sz": 40000, "epochs": 50, "eps_regularize": 1e-07, "TLAG": 10}
