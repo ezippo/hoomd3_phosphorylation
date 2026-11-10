@@ -1,10 +1,8 @@
 # hoomd3_phosphorylation
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.15207491.svg)](https://doi.org/10.5281/zenodo.15207491)
 
-Repository with code used in Zippo, E., Dormann, D., Speck, T. & Stelzl, L.L. Molecular simulations of enzymatic phosphorylation of
+Repository with code used in Zippo, E., Qiao, L., Dormann, D., Speck, T., Schmid, F., Stelzl, L.S. Kinase-phosphatase cycles drive self-sustained oscillations of protein condensates, BiorXiv (2026), https://doi.org/10.64898/2026.10.27.762139 .
+First introduced in Zippo, E., Dormann, D., Speck, T. & Stelzl, L.L. Molecular simulations of enzymatic phosphorylation of
 disordered proteins and their condensates, *Nat.Commun.* (2025), doi: https://doi.org/10.1038/s41467-025-59676-4 .
-
-Supporting data can be found on the Zenodo platform (Zippo, E. (2024). Supporting Data: Molecular simulations of enzymatic phosphorylation of disordered proteins and their condensates. Zenodo. https://doi.org/10.5281/zenodo.13833526).
 
 It contains the framework to easily run coarse-grained Molecular Dynamics (MD) simulations of multi-domain proteins with phosphorylation reaction Monte Carlo steps using HPS-derived models<sup>1</sup>.
 
@@ -13,7 +11,6 @@ It contains the framework to easily run coarse-grained Molecular Dynamics (MD) s
 - **example/**: folder with examples of usage of *hps_phosphorylation*.
 - **input_stats/**: folder with pdb files, amino-acids parameters from HPS<sup>2</sup> model and CALVADOS2<sup>3</sup>, input file template
 - **main.py**: python script to run the simulations with *hps_phosphorylation*.
-- **paper/**: pdf of the paper<sup>1</sup> and jupyter notebooks for analysis and plotting used in the paper.
 
 ## *hps_phosphorylation*
 
@@ -34,7 +31,7 @@ Copy the python script *main.py* to run the code.
 
 **Installation 2**
 
-The code is also available in PyPI-test and it can be installed by using the following command:
+The code is also available in PyPI-test, v3.1.*, and it can be installed by using the following command:
 
   pip install -i https://test.pypi.org/simple/ hps-phosphorylation
 
